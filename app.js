@@ -37,6 +37,7 @@
   }
   const imgUrl = (name, owner) => 'image.php?o=' + encodeURIComponent(owner || state.me.id) + '&f=' + encodeURIComponent(name);
   const thumbUrl = (name, owner) => imgUrl(name, owner) + '&s=t';
+  const squareUrl = (name, owner) => imgUrl(name, owner) + '&s=q';
   const midUrl = (name, owner) => imgUrl(name, owner) + '&s=m';
   // 画像の役割：1枚目=材料、2枚目=作り方、3枚目=表紙、4枚目以降=イメージ
   const ROLES = ['材料', '作り方', '表紙'];
@@ -168,7 +169,7 @@
   function card(r) {
     return el('button', { class: 'card', onclick: () => openView(r.id) },
       el('div', { class: 'thumb' },
-        el('img', { src: thumbUrl(shownName(r, r.images[2] ? 2 : r.images.findIndex(Boolean)), r.owner), loading: 'lazy', decoding: 'async', alt: '' }),
+        el('img', { src: squareUrl(shownName(r, r.images[2] ? 2 : r.images.findIndex(Boolean)), r.owner), loading: 'lazy', decoding: 'async', alt: '' }),
         r.images.filter(Boolean).length > 1 ? el('span', { class: 'badge' }, `${r.images.filter(Boolean).length}枚`) : null
       ),
       el('div', { class: 'meta' },

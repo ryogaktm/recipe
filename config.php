@@ -210,12 +210,14 @@ function can_view_image($viewer, $owner, $file, $token) {
 // 初めて表示されたときに作って uploads/<ユーザー>/t/ に保存する。GDが無いサーバーでは元画像を使う。
 const THUMB_W = 360;
 const THUMB_H = 480; // 3:4（一覧カードと同じ比率。縦長スクショは上の部分を使う）
+const SQUARE = 400;    // 一覧カード用（正方形）
 const MEDIUM_W = 1000; // 詳細画面用（スマホ画面に十分な大きさ。タップで原寸）
 // 変換後の拡張子（WebPが作れるサーバーならWebPで軽く）
 function variant_ext() { return function_exists('imagewebp') ? 'webp' : 'jpg'; }
 // $v: 't'=サムネイル / 'm'=詳細画面用
 function thumb_path($owner, $file, $v = 't') {
-    return UPLOAD_DIR . "/$owner/" . ($v === 'm' ? 'md' : 'th') . '/' . pathinfo($file, PATHINFO_FILENAME) . '.' . variant_ext();
+    $dir = ['t' => 'th', 'm' => 'md', 'q' => 'sq'][$v] ?? 'th';
+    return UPLOAD_DIR . "/$owner/$dir/" . pathinfo($file, PATHINFO_FILENAME) . '.' . variant_ext();
 }
 function make_thumb($src, $dst, $v = 't') {
     if (!function_exists('imagecreatetruecolor')) return false;
@@ -233,9 +235,15 @@ function make_thumb($src, $dst, $v = 't') {
         default: $im = false;
     }
     if (!$im) return false;
+    $cy = 0;
     if ($v === 'm') {
         $tw = MEDIUM_W; $th = (int)round($h * MEDIUM_W / $w);
         $cx = 0; $cw = $w; $ch = $h;
+    } elseif ($v === 'q') {
+        // 正方形に中央を切り抜き
+        $s = min($w, $h); $cw = $ch = $s;
+        $cx = (int)(($w - $s) / 2); $cy = (int)(($h - $s) / 2);
+        $tw = $th = min(SQUARE, $s);
     } else {
         // 3:4 に切り抜き（縦長は上から、横長は中央）
         if ($h / $w > THUMB_H / THUMB_W) { $cw = $w; $ch = (int)round($w * THUMB_H / THUMB_W); $cx = 0; }
@@ -244,7 +252,7 @@ function make_thumb($src, $dst, $v = 't') {
     }
     $out = imagecreatetruecolor($tw, $th);
     imagefill($out, 0, 0, imagecolorallocate($out, 255, 255, 255)); // 透過PNGは白背景に
-    imagecopyresampled($out, $im, 0, 0, $cx, 0, $tw, $th, $cw, $ch);
+    imagecopyresampled($out, $im, 0, 0, $cx, $cy ?? 0, $tw, $th, $cw, $ch);
     if (!is_dir(dirname($dst))) mkdir(dirname($dst), 0775, true);
     $tmp = $dst . '.' . bin2hex(random_bytes(3)) . '.tmp';
     $q = $v === 'm' ? 78 : 72;

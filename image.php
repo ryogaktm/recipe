@@ -17,7 +17,7 @@ $types = ['jpg' => 'image/jpeg', 'png' => 'image/png', 'webp' => 'image/webp', '
 $type = $types[$m[1]];
 // s=t ならサムネイル、s=m なら詳細画面用（なければ作る。作れなければ元画像）
 $s = (string)($_GET['s'] ?? '');
-if (($s === 't' || $s === 'm') && $m[1] !== 'gif') {
+if (($s === 't' || $s === 'm' || $s === 'q') && $m[1] !== 'gif') {
     $tp = thumb_path($owner, $f, $s);
     if (is_file($tp) || make_thumb($path, $tp, $s)) { $path = $tp; $type = variant_ext() === 'webp' ? 'image/webp' : 'image/jpeg'; }
 }
