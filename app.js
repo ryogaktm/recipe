@@ -318,6 +318,7 @@
         el('img', { src: srcOf(it), alt: ROLES[i], onclick: () => pickFor(i), title: 'タップで差し替え' }),
         label,
         el('button', { type: 'button', class: 'x', title: '外す', onclick: () => dropItem(i) }, '✕'),
+        el('button', { type: 'button', class: 'crop-btn', title: 'トリミング', onclick: () => openCrop(i) }, '✂'),
         el('div', { class: 'mv' },
           i > 0 ? el('button', { type: 'button', title: ROLES[i - 1] + 'と入れ替え', onclick: () => swap(i, i - 1) }, '◀') : null,
           i < 2 ? el('button', { type: 'button', class: 'r', title: ROLES[i + 1] + 'と入れ替え', onclick: () => swap(i, i + 1) }, '▶') : null)
@@ -331,6 +332,7 @@
         el('img', { src: srcOf(it), alt: '' }),
         el('span', { class: 'no r3' }, 'イメージ'),
         el('button', { type: 'button', class: 'x', title: '外す', onclick: () => dropItem(3 + i) }, '✕'),
+        el('button', { type: 'button', class: 'crop-btn', title: 'トリミング', onclick: () => openCrop(3 + i) }, '✂'),
         extra.length > 1 ? el('div', { class: 'mv' },
           i > 0 ? el('button', { type: 'button', onclick: () => move(i, -1) }, '◀') : null,
           i < extra.length - 1 ? el('button', { type: 'button', class: 'r', onclick: () => move(i, 1) }, '▶') : null
@@ -563,6 +565,147 @@
 
   // ---------- 検索 ----------
   $('#q').addEventListener('input', e => { state.query = e.target.value; render(); });
+
+  // ---------- トリミング ----------
+  // 画像の座標（元の画素）で切り抜き範囲を持ち、表示用に縮小して重ねる。
+  // 縦に長いスクショは横幅いっぱいに表示して、画面をスクロールしながら範囲を決められる。
+  const crop = { idx: -1, src: null, w: 0, h: 0, box: null, ratio: 0, scale: 1 };
+  function loadImage(url) {
+    return new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = url; });
+  }
+  async function openCrop(idx) {
+    const it = state.edit && state.edit.items[idx];
+    if (!it) return;
+    let img;
+    try { img = await loadImage(it.kind === 'old' ? imgUrl(it.name) : it.url); }
+    catch { return toast('画像を読み込めませんでした'); }
+    crop.idx = idx;
+    crop.ratio = 0;
+    document.querySelectorAll('#cropRatios button').forEach(b => b.classList.toggle('on', b.dataset.r === '0'));
+    $('#cropTitle').textContent = 'トリミング（' + (idx < 3 ? ROLES[idx] : 'イメージ') + '）';
+    setCropSource(img);
+    openModal('#cropModal');
+    requestAnimationFrame(layoutCrop);
+  }
+  function setCropSource(src) {
+    crop.src = src;
+    crop.w = src.naturalWidth || src.width;
+    crop.h = src.naturalHeight || src.height;
+    crop.box = { x: 0, y: 0, w: crop.w, h: crop.h };
+    $('#cropImg').src = src instanceof HTMLCanvasElement ? src.toDataURL('image/jpeg', 0.92) : src.src;
+  }
+  function layoutCrop() {
+    const stage = $('#cropStage');
+    const cw = stage.clientWidth - 32, ch = stage.clientHeight - 32;
+    let s = Math.min(cw / crop.w, ch / crop.h);
+    if (crop.h / crop.w > 2.2) s = Math.min(cw / crop.w, 1.5); // 縦長は横幅いっぱい＋スクロール
+    crop.scale = s;
+    const c = $('#cropCanvas');
+    c.style.width = Math.round(crop.w * s) + 'px';
+    c.style.height = Math.round(crop.h * s) + 'px';
+    drawCropBox();
+  }
+  function drawCropBox() {
+    const b = crop.box, s = crop.scale, el = $('#cropBox');
+    el.style.left = b.x * s + 'px'; el.style.top = b.y * s + 'px';
+    el.style.width = b.w * s + 'px'; el.style.height = b.h * s + 'px';
+  }
+  function applyRatio() {
+    if (!crop.ratio) return;
+    const b = crop.box, cx = b.x + b.w / 2, cy = b.y + b.h / 2;
+    let w = b.w, h = w / crop.ratio;
+    if (h > crop.h) { h = crop.h; w = h * crop.ratio; }
+    if (w > crop.w) { w = crop.w; h = w / crop.ratio; }
+    crop.box = clampBox({ x: cx - w / 2, y: cy - h / 2, w, h });
+    drawCropBox();
+  }
+  function clampBox(b) {
+    b.w = Math.min(b.w, crop.w); b.h = Math.min(b.h, crop.h);
+    b.x = Math.max(0, Math.min(b.x, crop.w - b.w));
+    b.y = Math.max(0, Math.min(b.y, crop.h - b.h));
+    return b;
+  }
+  // ドラッグ（指・マウス共通）
+  (() => {
+    let drag = null;
+    const box = $('#cropBox');
+    box.addEventListener('pointerdown', e => {
+      e.preventDefault();
+      box.setPointerCapture(e.pointerId);
+      drag = { h: e.target.dataset.h || 'move', sx: e.clientX, sy: e.clientY, b: Object.assign({}, crop.box) };
+    });
+    box.addEventListener('pointermove', e => {
+      if (!drag) return;
+      const s = crop.scale, dx = (e.clientX - drag.sx) / s, dy = (e.clientY - drag.sy) / s;
+      const o = drag.b, min = 40 / s;
+      let { x, y, w, h } = o;
+      if (drag.h === 'move') { x = o.x + dx; y = o.y + dy; crop.box = clampBox({ x, y, w, h }); return drawCropBox(); }
+      const H = drag.h;
+      if (H.includes('e')) w = Math.min(Math.max(min, o.w + dx), crop.w - o.x);
+      if (H.includes('s')) h = Math.min(Math.max(min, o.h + dy), crop.h - o.y);
+      if (H.includes('w')) { const nx = Math.max(0, Math.min(o.x + dx, o.x + o.w - min)); w = o.w + (o.x - nx); x = nx; }
+      if (H.includes('n')) { const ny = Math.max(0, Math.min(o.y + dy, o.y + o.h - min)); h = o.h + (o.y - ny); y = ny; }
+      if (crop.ratio) {
+        // 比率固定：横幅を基準に高さを合わせる（上下の辺だけ動かしたときは高さ基準）
+        if (H === 'n' || H === 's') w = h * crop.ratio; else h = w / crop.ratio;
+        if (H.includes('n')) y = o.y + o.h - h;
+        if (H.includes('w')) x = o.x + o.w - w;
+        if (x < 0 || y < 0 || x + w > crop.w || y + h > crop.h) return;
+      }
+      crop.box = { x, y, w, h };
+      drawCropBox();
+    });
+    const end = () => { drag = null; };
+    box.addEventListener('pointerup', end);
+    box.addEventListener('pointercancel', end);
+  })();
+  $('#cropRatios').addEventListener('click', e => {
+    const b = e.target.closest('button'); if (!b) return;
+    document.querySelectorAll('#cropRatios button').forEach(x => x.classList.toggle('on', x === b));
+    crop.ratio = +b.dataset.r;
+    if (crop.ratio) applyRatio();
+  });
+  $('#cropRotate').addEventListener('click', () => {
+    const c = document.createElement('canvas');
+    c.width = crop.h; c.height = crop.w;
+    const x = c.getContext('2d');
+    x.translate(c.width, 0); x.rotate(Math.PI / 2);
+    x.drawImage(crop.src, 0, 0);
+    setCropSource(c);
+    layoutCrop(); applyRatio();
+  });
+  $('#cropReset').addEventListener('click', async () => {
+    const it = state.edit.items[crop.idx];
+    try { setCropSource(await loadImage(it.kind === 'old' ? imgUrl(it.name) : it.url)); } catch {}
+    crop.ratio = 0;
+    document.querySelectorAll('#cropRatios button').forEach(b => b.classList.toggle('on', b.dataset.r === '0'));
+    layoutCrop();
+  });
+  $('#cropCancel').addEventListener('click', () => closeModal('#cropModal'));
+  $('#cropDone').addEventListener('click', () => {
+    const b = crop.box;
+    const sx = Math.round(b.x), sy = Math.round(b.y), sw = Math.round(b.w), sh = Math.round(b.h);
+    // 切り抜いて、横幅1600pxを超えるなら縮小
+    const k = Math.min(1, 1600 / sw);
+    const c = document.createElement('canvas');
+    c.width = Math.round(sw * k); c.height = Math.round(sh * k);
+    const x = c.getContext('2d');
+    x.fillStyle = '#fff'; x.fillRect(0, 0, c.width, c.height);
+    x.imageSmoothingQuality = 'high';
+    x.drawImage(crop.src, sx, sy, sw, sh, 0, 0, c.width, c.height);
+    const type = canWebp && state.webpOk ? 'image/webp' : 'image/jpeg';
+    c.toBlob(blob => {
+      if (!blob || !state.edit) return;
+      const items = state.edit.items, old = items[crop.idx];
+      if (old && old.kind === 'new') URL.revokeObjectURL(old.url);
+      items[crop.idx] = { kind: 'new', blob, url: URL.createObjectURL(blob) };
+      renderThumbs();
+      closeModal('#cropModal');
+      toast('トリミングしました（保存で反映）');
+    }, type, type === 'image/webp' ? 0.9 : 0.92);
+  });
+  window.addEventListener('resize', () => { if (!$('#cropModal').hidden) layoutCrop(); });
+
   // ---------- 共有されたレシピ：保存・外す ----------
   $('#importBtn').addEventListener('click', async () => {
     const r = state.current;
@@ -740,7 +883,8 @@
     }
     // Ctrl + S / Ctrl + Enter ：保存
     if (mod && (k === 's' || k === 'S' || k === 'Enter')) {
-      if (isOpen('#editModal')) { e.preventDefault(); $('#editForm').requestSubmit($('#saveBtn')); }
+      if (isOpen('#cropModal')) { e.preventDefault(); $('#cropDone').click(); }
+      else if (isOpen('#editModal')) { e.preventDefault(); $('#editForm').requestSubmit($('#saveBtn')); }
       else if (k !== 'Enter') e.preventDefault();
       return;
     }
@@ -749,6 +893,7 @@
 
     if (k === 'Escape') {
       if (isOpen('#lightbox')) return $('#lightbox').hidden = true;
+      if (isOpen('#cropModal')) return closeModal('#cropModal');
       if (isOpen('#helpModal')) return closeModal('#helpModal');
       if (isOpen('#shareModal')) return closeModal('#shareModal');
       if (isOpen('#accountModal')) return closeModal('#accountModal');
@@ -767,6 +912,7 @@
       return;
     }
 
+    if (isOpen('#cropModal')) { if (k === 'Enter') { e.preventDefault(); $('#cropDone').click(); } return; }
     if (mod || e.altKey || e.isComposing || typing()) return;
 
     if (isOpen('#lightbox')) return;

@@ -84,7 +84,7 @@ $h = function ($s) { return htmlspecialchars((string)$s, ENT_QUOTES); };
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@500;700;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=8">
+<link rel="stylesheet" href="style.css?v=9">
 </head>
 <body>
 <?php if (!$me): ?>
@@ -229,6 +229,39 @@ $h = function ($s) { return htmlspecialchars((string)$s, ENT_QUOTES); };
     </form>
   </div>
 
+  <!-- トリミング -->
+  <div class="modal crop-modal" id="cropModal" hidden>
+    <div class="crop-wrap">
+      <div class="crop-top">
+        <button type="button" class="btn small crop-cancel" id="cropCancel">キャンセル</button>
+        <b id="cropTitle">トリミング</b>
+        <button type="button" class="btn small primary" id="cropDone">完了</button>
+      </div>
+      <div class="crop-stage" id="cropStage">
+        <div class="crop-canvas" id="cropCanvas">
+          <img id="cropImg" alt="" draggable="false">
+          <div class="crop-box" id="cropBox">
+            <span class="grid-v"></span><span class="grid-h"></span>
+            <i data-h="nw"></i><i data-h="n"></i><i data-h="ne"></i><i data-h="e"></i>
+            <i data-h="se"></i><i data-h="s"></i><i data-h="sw"></i><i data-h="w"></i>
+          </div>
+        </div>
+      </div>
+      <div class="crop-tools">
+        <div class="crop-ratios" id="cropRatios">
+          <button type="button" data-r="0" class="on">自由</button>
+          <button type="button" data-r="0.75">3:4</button>
+          <button type="button" data-r="1">1:1</button>
+          <button type="button" data-r="1.3333">4:3</button>
+        </div>
+        <div class="crop-actions">
+          <button type="button" class="btn small" id="cropRotate">↻ 回転</button>
+          <button type="button" class="btn small" id="cropReset">元に戻す</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- カテゴリ管理 -->
   <div class="modal" id="catModal" hidden>
     <div class="sheet cats">
@@ -366,7 +399,7 @@ $h = function ($s) { return htmlspecialchars((string)$s, ENT_QUOTES); };
   <div class="lightbox" id="lightbox" hidden><img alt=""></div>
 
   <div class="toast" id="toast" hidden></div>
-  <script src="app.js?v=9"></script>
+  <script src="app.js?v=10"></script>
 <?php endif; ?>
 </body>
 </html>
