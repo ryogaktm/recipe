@@ -35,8 +35,7 @@ $img = function ($f) use ($owner, $key, $h) { return 'image.php?o=' . $h($owner)
 <title><?= $recipe ? $h($recipe['title']) . ' | RECIPES' : 'RECIPES' ?></title>
 <link rel="icon" type="image/png" href="icons/favicon-64.png?v=2">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png?v=2">
-<link href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@500;700;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=8">
+<link rel="stylesheet" href="style.css?v=11">
 </head>
 <body class="share-page">
   <header class="top">
@@ -62,7 +61,7 @@ $img = function ($f) use ($owner, $key, $h) { return 'image.php?o=' . $h($owner)
     <?php endif; ?>
     <div class="view-images share-images">
       <?php $roles = ['材料', '作り方', '表紙']; foreach ($recipe['images'] as $i => $f): if ($f === '') continue; ?>
-        <figure class="img-block"><figcaption class="img-role r<?= min($i, 3) ?>"><?= $roles[$i] ?? 'イメージ' ?></figcaption><img src="<?= $img($i < 2 && !empty($recipe['fix'][$f]) ? $recipe['fix'][$f] : $f) ?>" alt="" loading="lazy"></figure>
+        <figure class="img-block"><figcaption class="img-role r<?= min($i, 3) ?>"><?= $roles[$i] ?? 'イメージ' ?></figcaption><img src="<?= $img($i < 2 && !empty($recipe['fix'][$f]) ? $recipe['fix'][$f] : $f) ?>&amp;s=m" alt="" loading="lazy"></figure>
       <?php endforeach; ?>
     </div>
     <div class="share-cta">

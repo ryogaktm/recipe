@@ -208,17 +208,22 @@ function can_view_image($viewer, $owner, $file, $token) {
 // ===== サムネイル（一覧用の小さい画像） =====
 // 一覧・編集画面では元画像の代わりにこれを使うので、スクロールが軽くなる。
 // 初めて表示されたときに作って uploads/<ユーザー>/t/ に保存する。GDが無いサーバーでは元画像を使う。
-const THUMB_W = 480;
-const THUMB_H = 640; // 3:4（一覧カードと同じ比率。縦長スクショは上の部分を使う）
-function thumb_path($owner, $file) {
-    return UPLOAD_DIR . "/$owner/t/" . pathinfo($file, PATHINFO_FILENAME) . '.jpg';
+const THUMB_W = 360;
+const THUMB_H = 480; // 3:4（一覧カードと同じ比率。縦長スクショは上の部分を使う）
+const MEDIUM_W = 1000; // 詳細画面用（スマホ画面に十分な大きさ。タップで原寸）
+// 変換後の拡張子（WebPが作れるサーバーならWebPで軽く）
+function variant_ext() { return function_exists('imagewebp') ? 'webp' : 'jpg'; }
+// $v: 't'=サムネイル / 'm'=詳細画面用
+function thumb_path($owner, $file, $v = 't') {
+    return UPLOAD_DIR . "/$owner/" . ($v === 'm' ? 'md' : 'th') . '/' . pathinfo($file, PATHINFO_FILENAME) . '.' . variant_ext();
 }
-function make_thumb($src, $dst) {
+function make_thumb($src, $dst, $v = 't') {
     if (!function_exists('imagecreatetruecolor')) return false;
     $info = @getimagesize($src);
     if (!$info) return false;
     list($w, $h) = $info;
     if ($w * $h > 40000000) return false;          // 大きすぎる画像はメモリ節約のため作らない
+    if ($v === 'm' && $w <= MEDIUM_W) return false; // 十分小さい画像はそのまま使う
     @ini_set('memory_limit', '256M');
     switch ($info['mime']) {
         case 'image/jpeg': $im = @imagecreatefromjpeg($src); break;
@@ -228,16 +233,22 @@ function make_thumb($src, $dst) {
         default: $im = false;
     }
     if (!$im) return false;
-    // 3:4 に切り抜き（縦長は上から、横長は中央）
-    if ($h / $w > THUMB_H / THUMB_W) { $cw = $w; $ch = (int)round($w * THUMB_H / THUMB_W); $cx = 0; }
-    else { $ch = $h; $cw = (int)round($h * THUMB_W / THUMB_H); $cx = (int)(($w - $cw) / 2); }
-    $tw = min(THUMB_W, $cw); $th = (int)round($tw * THUMB_H / THUMB_W);
+    if ($v === 'm') {
+        $tw = MEDIUM_W; $th = (int)round($h * MEDIUM_W / $w);
+        $cx = 0; $cw = $w; $ch = $h;
+    } else {
+        // 3:4 に切り抜き（縦長は上から、横長は中央）
+        if ($h / $w > THUMB_H / THUMB_W) { $cw = $w; $ch = (int)round($w * THUMB_H / THUMB_W); $cx = 0; }
+        else { $ch = $h; $cw = (int)round($h * THUMB_W / THUMB_H); $cx = (int)(($w - $cw) / 2); }
+        $tw = min(THUMB_W, $cw); $th = (int)round($tw * THUMB_H / THUMB_W);
+    }
     $out = imagecreatetruecolor($tw, $th);
     imagefill($out, 0, 0, imagecolorallocate($out, 255, 255, 255)); // 透過PNGは白背景に
     imagecopyresampled($out, $im, 0, 0, $cx, 0, $tw, $th, $cw, $ch);
     if (!is_dir(dirname($dst))) mkdir(dirname($dst), 0775, true);
     $tmp = $dst . '.' . bin2hex(random_bytes(3)) . '.tmp';
-    $ok = imagejpeg($out, $tmp, 84) && rename($tmp, $dst);
+    $q = $v === 'm' ? 78 : 72;
+    $ok = (variant_ext() === 'webp' ? imagewebp($out, $tmp, $q) : imagejpeg($out, $tmp, $q + 6)) && rename($tmp, $dst);
     imagedestroy($im); imagedestroy($out);
     return $ok;
 }

@@ -15,10 +15,11 @@ if (!can_view_image($viewer, $owner, $f, $token)) { http_response_code(403); exi
 
 $types = ['jpg' => 'image/jpeg', 'png' => 'image/png', 'webp' => 'image/webp', 'gif' => 'image/gif'];
 $type = $types[$m[1]];
-// s=t ならサムネイル（なければ作る。作れなければ元画像）
-if (($_GET['s'] ?? '') === 't' && $m[1] !== 'gif') {
-    $tp = thumb_path($owner, $f);
-    if (is_file($tp) || make_thumb($path, $tp)) { $path = $tp; $type = 'image/jpeg'; }
+// s=t ならサムネイル、s=m なら詳細画面用（なければ作る。作れなければ元画像）
+$s = (string)($_GET['s'] ?? '');
+if (($s === 't' || $s === 'm') && $m[1] !== 'gif') {
+    $tp = thumb_path($owner, $f, $s);
+    if (is_file($tp) || make_thumb($path, $tp, $s)) { $path = $tp; $type = variant_ext() === 'webp' ? 'image/webp' : 'image/jpeg'; }
 }
 header('Content-Type: ' . $type);
 header('Content-Length: ' . filesize($path));

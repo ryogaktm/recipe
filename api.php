@@ -42,7 +42,9 @@ function delete_images($uid, $files) {
     foreach ($files as $f) {
         $p = UPLOAD_DIR . "/$uid/" . basename($f);
         if ($f !== '' && is_file($p)) @unlink($p);
-        if ($f !== '' && is_file(thumb_path($uid, $f))) @unlink(thumb_path($uid, $f));
+        foreach (['t', 'm'] as $v) { $tp = thumb_path($uid, $f, $v); if ($f !== '' && is_file($tp)) @unlink($tp); }
+        $old = UPLOAD_DIR . "/$uid/t/" . pathinfo($f, PATHINFO_FILENAME) . '.jpg'; // 旧サムネイル
+        if ($f !== '' && is_file($old)) @unlink($old);
     }
 }
 function public_user($u) { return ['id' => $u['id'], 'name' => $u['name']]; }
@@ -226,6 +228,11 @@ case 'save_recipe':
     }
     save_user($uid, 'recipes', $recipes);
     delete_images($uid, array_diff($old, $keep));
+    // 保存した画像の小さいバージョンを先に作っておく（初めて開くときに待たせない）
+    foreach (array_merge($added, $fixAdded) as $nf) {
+        $sp = UPLOAD_DIR . "/$uid/$nf";
+        foreach (['t', 'm'] as $v) { $tp = thumb_path($uid, $nf, $v); if (!is_file($tp)) make_thumb($sp, $tp, $v); }
+    }
     out(['recipe' => strip_private($saved)]);
 
 case 'delete_recipe':

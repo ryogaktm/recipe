@@ -37,6 +37,7 @@
   }
   const imgUrl = (name, owner) => 'image.php?o=' + encodeURIComponent(owner || state.me.id) + '&f=' + encodeURIComponent(name);
   const thumbUrl = (name, owner) => imgUrl(name, owner) + '&s=t';
+  const midUrl = (name, owner) => imgUrl(name, owner) + '&s=m';
   // 画像の役割：1枚目=材料、2枚目=作り方、3枚目=表紙、4枚目以降=イメージ
   const ROLES = ['材料', '作り方', '表紙'];
   const roleOf = i => ROLES[i] || 'イメージ';
@@ -215,7 +216,7 @@
     $('#viewImages').replaceChildren(...r.images.flatMap((n, i) => !n ? [] :
       el('figure', { class: 'img-block' },
         el('figcaption', { class: 'img-role r' + Math.min(i, 3) }, roleOf(i)),
-        el('img', { src: imgUrl(shownName(r, i), r.owner), alt: roleOf(i), loading: i > 1 ? 'lazy' : 'eager', decoding: 'async', onclick: () => openLightbox(imgUrl(shownName(r, i), r.owner)) }))
+        el('img', { src: midUrl(shownName(r, i), r.owner), alt: roleOf(i), loading: i > 1 ? 'lazy' : 'eager', decoding: 'async', onclick: () => openLightbox(imgUrl(shownName(r, i), r.owner)) }))
     ));
     $('#viewModal .view-body').scrollTop = 0;
     openModal('#viewModal');
