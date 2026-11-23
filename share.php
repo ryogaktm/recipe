@@ -35,7 +35,8 @@ $img = function ($f) use ($owner, $key, $h) { return 'image.php?o=' . $h($owner)
 <title><?= $recipe ? $h($recipe['title']) . ' | RECIPES' : 'RECIPES' ?></title>
 <link rel="icon" type="image/png" href="icons/favicon-64.png?v=2">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png?v=2">
-<link rel="stylesheet" href="style.css?v=11">
+<link href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@500;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css?v=12">
 </head>
 <body class="share-page">
   <header class="top">
