@@ -41,7 +41,7 @@ function find_index($list, $id) {
 function delete_images($uid, $files) {
     foreach ($files as $f) {
         $p = UPLOAD_DIR . "/$uid/" . basename($f);
-        if (is_file($p)) @unlink($p);
+        if ($f !== '' && is_file($p)) @unlink($p);
     }
 }
 function public_user($u) { return ['id' => $u['id'], 'name' => $u['name']]; }
@@ -71,12 +71,13 @@ function copy_recipe_to($uid, $ownerId, $src, &$recipes, &$categories) {
     $images = [];
     foreach ($src['images'] as $f) {
         $from = UPLOAD_DIR . "/$ownerId/" . basename($f);
-        if (!is_file($from)) continue;
+        if ($f === '' || !is_file($from)) { $images[] = ''; continue; }
         $ext = pathinfo($f, PATHINFO_EXTENSION);
         $name = bin2hex(random_bytes(12)) . '.' . $ext;
         if (copy($from, "$dir/$name")) $images[] = $name;
     }
-    if (!$images) fail('画像をコピーできませんでした');
+    while ($images && end($images) === '') array_pop($images);
+    if (!array_filter($images)) fail('画像をコピーできませんでした');
     $now = date('c');
     $rec = ['id' => new_id('r'), 'title' => $src['title'], 'categories' => array_values(array_unique($myCats)),
             'images' => $images, 'created' => $now, 'updated' => $now, 'from' => $ownerId];
@@ -145,13 +146,18 @@ case 'save_recipe':
         }
     }
     // 並び順: order[] = "k:ファイル名"（既存）/ "n:番号"（今回追加分）
+    // 先頭3枠（材料・作り方・表紙）は "e:" で空きにできる
     $images = [];
     foreach ((array)($_POST['order'] ?? []) as $o) {
-        if (str_starts_with($o, 'k:') && in_array(substr($o, 2), $keep, true)) $images[] = substr($o, 2);
-        elseif (str_starts_with($o, 'n:') && isset($added[(int)substr($o, 2)])) $images[] = $added[(int)substr($o, 2)];
+        if ($o === 'e:') { if (count($images) < 3) $images[] = ''; continue; }
+        $f = null;
+        if (str_starts_with($o, 'k:') && in_array(substr($o, 2), $keep, true)) $f = substr($o, 2);
+        elseif (str_starts_with($o, 'n:') && isset($added[(int)substr($o, 2)])) $f = $added[(int)substr($o, 2)];
+        if ($f !== null && !in_array($f, $images, true)) $images[] = $f;
     }
-    $images = array_values(array_unique(array_merge($images, $keep, $added)));
-    if (!$images) fail('画像を1枚以上添付してください');
+    foreach (array_merge($keep, $added) as $f) if (!in_array($f, $images, true)) $images[] = $f; // 漏れ防止
+    while ($images && end($images) === '') array_pop($images);
+    if (!array_filter($images)) fail('画像を1枚以上添付してください');
 
     $now = date('c');
     if ($idx >= 0) {

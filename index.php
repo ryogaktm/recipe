@@ -84,7 +84,7 @@ $h = function ($s) { return htmlspecialchars((string)$s, ENT_QUOTES); };
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@500;700;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=5">
+<link rel="stylesheet" href="style.css?v=6">
 </head>
 <body>
 <?php if (!$me): ?>
@@ -183,13 +183,16 @@ $h = function ($s) { return htmlspecialchars((string)$s, ENT_QUOTES); };
         <label class="field-label">タイトル</label>
         <input id="fTitle" class="input" maxlength="100" placeholder="例：ふわふわパンケーキ" required>
 
-        <label class="field-label">画像 <span class="hint">（貼り付け/ドラッグでも追加できます）</span></label>
-        <p class="role-guide"><span class="r0">1 材料</span><span class="r1">2 作り方</span><span class="r2">3 表紙</span><span class="r3">4〜 イメージ</span></p>
+        <label class="field-label">画像 <span class="hint">（枠をタップ・貼り付け・ドラッグで追加）</span></label>
+        <input type="file" id="slotFile" accept="image/*" hidden>
+        <div class="slots" id="slots"></div>
+
+        <label class="field-label"><span class="slot-label r3 inline">4〜 イメージ</span> <span class="hint">（完成写真など・何枚でも）</span></label>
         <div class="drop" id="drop">
           <div class="thumbs" id="thumbs"></div>
           <label class="add-img">
             <input type="file" id="fFiles" accept="image/*" multiple hidden>
-            <span>＋<br>画像を追加</span>
+            <span>＋<br>イメージを追加</span>
           </label>
         </div>
 
@@ -343,7 +346,7 @@ $h = function ($s) { return htmlspecialchars((string)$s, ENT_QUOTES); };
   <div class="lightbox" id="lightbox" hidden><img alt=""></div>
 
   <div class="toast" id="toast" hidden></div>
-  <script src="app.js?v=5"></script>
+  <script src="app.js?v=6"></script>
 <?php endif; ?>
 </body>
 </html>

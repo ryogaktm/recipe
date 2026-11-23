@@ -39,7 +39,7 @@
   // 画像の役割：1枚目=材料、2枚目=作り方、3枚目=表紙、4枚目以降=イメージ
   const ROLES = ['材料', '作り方', '表紙'];
   const roleOf = i => ROLES[i] || 'イメージ';
-  const coverOf = imgs => imgs[2] || imgs[0];
+  const coverOf = imgs => imgs[2] || imgs.find(Boolean);
   const isPC = matchMedia('(hover: hover) and (pointer: fine)').matches;
   const catName = (id) => (state.categories.find(c => c.id === id) || {}).name;
 
@@ -148,7 +148,7 @@
     return el('button', { class: 'card', onclick: () => openView(r.id) },
       el('div', { class: 'thumb' },
         el('img', { src: imgUrl(coverOf(r.images), r.owner), loading: 'lazy', alt: '' }),
-        r.images.length > 1 ? el('span', { class: 'badge' }, `${r.images.length}枚`) : null
+        r.images.filter(Boolean).length > 1 ? el('span', { class: 'badge' }, `${r.images.filter(Boolean).length}枚`) : null
       ),
       el('div', { class: 'meta' },
         r.from ? el('p', { class: 'from' }, r.from.name + ' さんから') : null,
@@ -188,7 +188,7 @@
     $('#viewTitle').textContent = r.title;
     $('#viewFrom').textContent = r.from ? `${r.from.name} さんから共有されたレシピ` : '';
     $('#viewCats').replaceChildren(...r.catNames.map(n => el('span', { class: 'chip' }, n)));
-    $('#viewImages').replaceChildren(...r.images.map((n, i) =>
+    $('#viewImages').replaceChildren(...r.images.flatMap((n, i) => !n ? [] :
       el('figure', { class: 'img-block' },
         el('figcaption', { class: 'img-role r' + Math.min(i, 3) }, roleOf(i)),
         el('img', { src: imgUrl(n, r.owner), alt: roleOf(i), onclick: () => openLightbox(imgUrl(n, r.owner)) }))
@@ -242,12 +242,11 @@
   // ---------- 追加・編集 ----------
   $('#addBtn').addEventListener('click', () => openEdit(null));
 
+  // 編集中の画像：items[0]=材料, [1]=作り方, [2]=表紙（空なら null）, [3〜]=イメージ
   function openEdit(r) {
-    state.edit = {
-      id: r ? r.id : '',
-      items: r ? r.images.map(name => ({ kind: 'old', name })) : [],
-      cats: new Set(r ? r.categories : [...state.filter]),
-    };
+    const items = r ? r.images.map(name => name ? { kind: 'old', name } : null) : [];
+    while (items.length < 3) items.push(null);
+    state.edit = { id: r ? r.id : '', items, cats: new Set(r ? r.categories : [...state.filter]) };
     $('#editHeading').textContent = r ? 'レシピを編集' : 'レシピを追加';
     $('#fTitle').value = r ? r.title : '';
     $('#newCat').value = '';
@@ -258,24 +257,57 @@
   }
   function cleanupEdit() {
     if (!state.edit) return;
-    for (const it of state.edit.items) if (it.kind === 'new') URL.revokeObjectURL(it.url);
+    for (const it of state.edit.items) if (it && it.kind === 'new') URL.revokeObjectURL(it.url);
     state.edit = null;
+  }
+  const srcOf = it => it.kind === 'old' ? imgUrl(it.name) : it.url;
+  function dropItem(i) {
+    const items = state.edit.items, it = items[i];
+    if (it && it.kind === 'new') URL.revokeObjectURL(it.url);
+    if (i < 3) items[i] = null; else items.splice(i, 1);
+    renderThumbs();
+  }
+  let slotTarget = null;
+  function pickFor(i) { slotTarget = i; $('#slotFile').click(); }
+  $('#slotFile').addEventListener('change', e => { addFiles(e.target.files, slotTarget); e.target.value = ''; });
+  function dropTarget(node, slot) {
+    ['dragenter', 'dragover'].forEach(t => node.addEventListener(t, e => { e.preventDefault(); e.stopPropagation(); node.classList.add('over'); }));
+    node.addEventListener('dragleave', () => node.classList.remove('over'));
+    node.addEventListener('drop', e => { e.preventDefault(); e.stopPropagation(); node.classList.remove('over'); addFiles(e.dataTransfer.files, slot); });
+    return node;
   }
 
   function renderThumbs() {
     const items = state.edit.items;
-    const move = (i, d) => { const j = i + d; if (j < 0 || j >= items.length) return; [items[i], items[j]] = [items[j], items[i]]; renderThumbs(); };
-    $('#thumbs').replaceChildren(...items.map((it, i) =>
+    // ---- 材料・作り方・表紙の3枠 ----
+    const swap = (i, j) => { [items[i], items[j]] = [items[j], items[i]]; renderThumbs(); };
+    $('#slots').replaceChildren(...[0, 1, 2].map(i => {
+      const it = items[i];
+      const label = el('span', { class: 'slot-label r' + i }, `${i + 1} ${ROLES[i]}`);
+      if (!it) {
+        return dropTarget(el('button', { type: 'button', class: 'slot empty r' + i + '-line', onclick: () => pickFor(i) },
+          label, el('span', { class: 'slot-plus' }, '＋'), el('span', { class: 'slot-hint' }, `${ROLES[i]}の画像`)), i);
+      }
+      return dropTarget(el('div', { class: 'slot filled' },
+        el('img', { src: srcOf(it), alt: ROLES[i], onclick: () => pickFor(i), title: 'タップで差し替え' }),
+        label,
+        el('button', { type: 'button', class: 'x', title: '外す', onclick: () => dropItem(i) }, '✕'),
+        el('div', { class: 'mv' },
+          i > 0 ? el('button', { type: 'button', title: ROLES[i - 1] + 'と入れ替え', onclick: () => swap(i, i - 1) }, '◀') : null,
+          i < 2 ? el('button', { type: 'button', class: 'r', title: ROLES[i + 1] + 'と入れ替え', onclick: () => swap(i, i + 1) }, '▶') : null)
+      ), i);
+    }));
+    // ---- イメージ（4枚目以降） ----
+    const extra = items.slice(3);
+    const move = (i, d) => { const a = 3 + i, b = a + d; if (b < 3 || b >= items.length) return; swap(a, b); };
+    $('#thumbs').replaceChildren(...extra.map((it, i) =>
       el('div', { class: 'tb' },
-        el('img', { src: it.kind === 'old' ? imgUrl(it.name) : it.url, alt: '' }),
-        el('span', { class: 'no r' + Math.min(i, 3) }, roleOf(i)),
-        el('button', { type: 'button', class: 'x', title: '外す', onclick: () => {
-          if (it.kind === 'new') URL.revokeObjectURL(it.url);
-          items.splice(i, 1); renderThumbs();
-        } }, '✕'),
-        items.length > 1 ? el('div', { class: 'mv' },
+        el('img', { src: srcOf(it), alt: '' }),
+        el('span', { class: 'no r3' }, 'イメージ'),
+        el('button', { type: 'button', class: 'x', title: '外す', onclick: () => dropItem(3 + i) }, '✕'),
+        extra.length > 1 ? el('div', { class: 'mv' },
           i > 0 ? el('button', { type: 'button', onclick: () => move(i, -1) }, '◀') : null,
-          i < items.length - 1 ? el('button', { type: 'button', class: 'r', onclick: () => move(i, 1) }, '▶') : null
+          i < extra.length - 1 ? el('button', { type: 'button', class: 'r', onclick: () => move(i, 1) }, '▶') : null
         ) : null
       )
     ));
@@ -313,22 +345,36 @@
   $('#newCat').addEventListener('keydown', e => { if (e.key === 'Enter' && !e.isComposing) { e.preventDefault(); addFromEdit(); } });
 
   // 画像の取り込み（選択・ドラッグ・貼り付け）
-  async function addFiles(files) {
+  // slot を指定すると、その枠（0=材料,1=作り方,2=表紙,'extra'=イメージ）に入れる。
+  // 指定がなければ 材料 → 作り方 → 表紙 → イメージ の順で空いている所に入れる。
+  async function addFiles(files, slot) {
     const imgs = [...files].filter(f => f.type.startsWith('image/') || /\.(heic|heif)$/i.test(f.name));
-    if (!imgs.length) return;
+    if (!imgs.length || !state.edit) return;
+    const placed = [];
     for (const f of imgs) {
-      try {
-        const blob = await prepareImage(f);
-        state.edit && state.edit.items.push({ kind: 'new', blob, url: URL.createObjectURL(blob) });
-      } catch { toast('読み込めない画像がありました'); }
+      let blob;
+      try { blob = await prepareImage(f); } catch { toast('読み込めない画像がありました'); continue; }
+      if (!state.edit) return;
+      const items = state.edit.items;
+      const it = { kind: 'new', blob, url: URL.createObjectURL(blob) };
+      let i;
+      if (typeof slot === 'number' && !placed.length) {
+        i = slot;
+        if (items[i] && items[i].kind === 'new') URL.revokeObjectURL(items[i].url);
+      } else if (slot === 'extra') {
+        i = items.length;
+      } else {
+        i = [0, 1, 2].find(k => !items[k]);
+        if (i === undefined) i = items.length;
+      }
+      items[i] = it;
+      placed.push(i < 3 ? ROLES[i] : 'イメージ');
     }
-    if (state.edit) renderThumbs();
+    renderThumbs();
+    if (placed.length) toast([...new Set(placed)].map(p => `「${p}」`).join('') + 'に入れました');
   }
-  $('#fFiles').addEventListener('change', e => { addFiles(e.target.files); e.target.value = ''; });
-  const drop = $('#drop');
-  ['dragenter', 'dragover'].forEach(t => drop.addEventListener(t, e => { e.preventDefault(); drop.classList.add('over'); }));
-  ['dragleave', 'drop'].forEach(t => drop.addEventListener(t, e => { e.preventDefault(); drop.classList.remove('over'); }));
-  drop.addEventListener('drop', e => addFiles(e.dataTransfer.files));
+  $('#fFiles').addEventListener('change', e => { addFiles(e.target.files, 'extra'); e.target.value = ''; });
+  dropTarget($('#drop'), 'extra');
   document.addEventListener('paste', e => {
     const files = [...(e.clipboardData?.files || [])].filter(f => f.type.startsWith('image/'));
     if (!files.length) return;
@@ -373,13 +419,14 @@
     const ed = state.edit;
     const title = $('#fTitle').value.trim();
     if (!title) return $('#fTitle').focus();
-    if (!ed.items.length) return toast('画像を1枚以上追加してください');
+    if (!ed.items.some(Boolean)) return toast('画像を1枚以上追加してください');
     const fd = new FormData();
     fd.append('id', ed.id);
     fd.append('title', title);
     ed.cats.forEach(c => fd.append('categories[]', c));
     let n = 0;
-    for (const it of ed.items) {
+    for (const [i, it] of ed.items.entries()) {
+      if (!it) { if (i < 3) fd.append('order[]', 'e:'); continue; }
       if (it.kind === 'old') { fd.append('keep[]', it.name); fd.append('order[]', 'k:' + it.name); }
       else {
         const ext = (it.blob.type.split('/')[1] || 'jpg').replace('jpeg', 'jpg');
