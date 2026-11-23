@@ -43,8 +43,8 @@ if (!$me && $_SERVER['REQUEST_METHOD'] === 'POST') {
             $error = '招待コードが違います';
         } elseif (!preg_match('/^[A-Za-z0-9_\-]{3,20}$/', $nameValue)) {
             $error = 'ユーザー名は半角英数字（_ - も可）3〜20文字にしてください';
-        } elseif (strlen($pw) < 6) {
-            $error = 'パスワードは6文字以上にしてください';
+        } elseif (strlen($pw) < 4) {
+            $error = 'パスワードは4文字以上にしてください';
         } elseif (find_user($users, 'name', $nameValue)) {
             $error = 'そのユーザー名はもう使われています';
         } else {
@@ -106,7 +106,7 @@ $h = function ($s) { return htmlspecialchars((string)$s, ENT_QUOTES); };
       <input type="hidden" name="mode" value="<?= $h($mode) ?>">
       <input type="hidden" name="return" value="<?= $h($return) ?>">
       <input type="text" name="name" placeholder="ユーザー名" value="<?= $h($nameValue) ?>" autocapitalize="off" autocorrect="off" spellcheck="false" autocomplete="username" required>
-      <input type="password" name="password" placeholder="パスワード<?= $mode === 'register' ? '（6文字以上）' : '' ?>" autocomplete="<?= $mode === 'register' ? 'new-password' : 'current-password' ?>" required>
+      <input type="password" name="password" placeholder="パスワード<?= $mode === 'register' ? '（4文字以上）' : '' ?>" autocomplete="<?= $mode === 'register' ? 'new-password' : 'current-password' ?>" required>
       <?php if ($mode === 'register' && !$noUsers && $settings['invite_code'] !== ''): ?>
         <input type="text" name="invite" placeholder="招待コード" autocapitalize="off" required>
       <?php endif; ?>
@@ -314,7 +314,7 @@ $h = function ($s) { return htmlspecialchars((string)$s, ENT_QUOTES); };
           <summary class="menu-item">パスワードを変える</summary>
           <form id="pwForm" class="stack-form">
             <input class="input" type="password" id="pwCur" placeholder="今のパスワード" autocomplete="current-password" required>
-            <input class="input" type="password" id="pwNew" placeholder="新しいパスワード（6文字以上）" autocomplete="new-password" required>
+            <input class="input" type="password" id="pwNew" placeholder="新しいパスワード（4文字以上）" autocomplete="new-password" required>
             <button class="btn primary">変更する</button>
           </form>
         </details>

@@ -301,7 +301,7 @@ case 'change_password':
     $cur = (string)($_POST['current'] ?? '');
     $new = (string)($_POST['new'] ?? '');
     if (!password_verify($cur, $me['hash'])) fail('今のパスワードが違います');
-    if (strlen($new) < 6) fail('新しいパスワードは6文字以上にしてください');
+    if (strlen($new) < 4) fail('新しいパスワードは4文字以上にしてください');
     $users = load_json('users');
     foreach ($users as &$u) if ($u['id'] === $uid) { $u['hash'] = password_hash($new, PASSWORD_DEFAULT); }
     unset($u);
