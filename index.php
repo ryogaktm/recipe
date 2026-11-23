@@ -350,7 +350,7 @@ $h = function ($s) { return htmlspecialchars((string)$s, ENT_QUOTES); };
   <div class="lightbox" id="lightbox" hidden><img alt=""></div>
 
   <div class="toast" id="toast" hidden></div>
-  <script src="app.js?v=7"></script>
+  <script src="app.js?v=8"></script>
 <?php endif; ?>
 </body>
 </html>

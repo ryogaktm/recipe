@@ -14,7 +14,13 @@ if (!is_file($path)) { http_response_code(404); exit; }
 if (!can_view_image($viewer, $owner, $f, $token)) { http_response_code(403); exit; }
 
 $types = ['jpg' => 'image/jpeg', 'png' => 'image/png', 'webp' => 'image/webp', 'gif' => 'image/gif'];
-header('Content-Type: ' . $types[$m[1]]);
+$type = $types[$m[1]];
+// s=t ならサムネイル（なければ作る。作れなければ元画像）
+if (($_GET['s'] ?? '') === 't' && $m[1] !== 'gif') {
+    $tp = thumb_path($owner, $f);
+    if (is_file($tp) || make_thumb($path, $tp)) { $path = $tp; $type = 'image/jpeg'; }
+}
+header('Content-Type: ' . $type);
 header('Content-Length: ' . filesize($path));
 header('Cache-Control: private, max-age=31536000, immutable');
 header('X-Content-Type-Options: nosniff');

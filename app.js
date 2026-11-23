@@ -36,6 +36,7 @@
     return json;
   }
   const imgUrl = (name, owner) => 'image.php?o=' + encodeURIComponent(owner || state.me.id) + '&f=' + encodeURIComponent(name);
+  const thumbUrl = (name, owner) => imgUrl(name, owner) + '&s=t';
   // 画像の役割：1枚目=材料、2枚目=作り方、3枚目=表紙、4枚目以降=イメージ
   const ROLES = ['材料', '作り方', '表紙'];
   const roleOf = i => ROLES[i] || 'イメージ';
@@ -78,6 +79,7 @@
     state.recipes = d.recipes;
     state.categories = d.categories;
     state.inbox = d.inbox;
+    state.webpOk = !!d.webp_ok;
     state.settings = d.settings || null;
     state.userCount = d.user_count || 0;
     if (state.mode === 'inbox' && !state.inbox.length) state.mode = 'mine';
@@ -159,7 +161,7 @@
   function card(r) {
     return el('button', { class: 'card', onclick: () => openView(r.id) },
       el('div', { class: 'thumb' },
-        el('img', { src: imgUrl(coverOf(r.images), r.owner), loading: 'lazy', alt: '' }),
+        el('img', { src: thumbUrl(coverOf(r.images), r.owner), loading: 'lazy', decoding: 'async', alt: '' }),
         r.images.filter(Boolean).length > 1 ? el('span', { class: 'badge' }, `${r.images.filter(Boolean).length}枚`) : null
       ),
       el('div', { class: 'meta' },
@@ -205,7 +207,7 @@
     $('#viewImages').replaceChildren(...r.images.flatMap((n, i) => !n ? [] :
       el('figure', { class: 'img-block' },
         el('figcaption', { class: 'img-role r' + Math.min(i, 3) }, roleOf(i)),
-        el('img', { src: imgUrl(n, r.owner), alt: roleOf(i), onclick: () => openLightbox(imgUrl(n, r.owner)) }))
+        el('img', { src: imgUrl(n, r.owner), alt: roleOf(i), loading: i > 1 ? 'lazy' : 'eager', decoding: 'async', onclick: () => openLightbox(imgUrl(n, r.owner)) }))
     ));
     $('#viewModal .view-body').scrollTop = 0;
     openModal('#viewModal');
@@ -275,7 +277,7 @@
     for (const it of state.edit.items) if (it && it.kind === 'new') URL.revokeObjectURL(it.url);
     state.edit = null;
   }
-  const srcOf = it => it.kind === 'old' ? imgUrl(it.name) : it.url;
+  const srcOf = it => it.kind === 'old' ? thumbUrl(it.name) : it.url;
   function dropItem(i) {
     const items = state.edit.items, it = items[i];
     if (it && it.kind === 'new') URL.revokeObjectURL(it.url);
@@ -404,7 +406,9 @@
     addFiles(files);
   });
 
-  // 大きすぎる画像は横幅1600pxまで縮小（縦長のスクショは高さをそのまま活かす）
+  // アップロード前の最適化：横幅1600pxまで縮小（縦長スクショは高さをそのまま活かす）。
+  // 小さい画像はそのまま。変換するときは文字がにじみにくい WebP（使えないブラウザは高画質JPEG）。
+  const canWebp = (() => { try { return document.createElement('canvas').toDataURL('image/webp').startsWith('data:image/webp'); } catch { return false; } })();
   function prepareImage(file) {
     return new Promise((resolve, reject) => {
       if (file.type === 'image/gif') return resolve(file);
@@ -412,17 +416,33 @@
       const img = new Image();
       img.onload = () => {
         URL.revokeObjectURL(url);
-        const MAX_W = 1600, MAX_H = 14000;
-        const s = Math.min(1, MAX_W / img.naturalWidth, MAX_H / img.naturalHeight);
+        const MAX_W = 1600, MAX_H = 12000;
+        const w = img.naturalWidth, h = img.naturalHeight;
+        const s = Math.min(1, MAX_W / w, MAX_H / h);
         const okType = ['image/jpeg', 'image/png', 'image/webp'].includes(file.type);
-        if (s === 1 && okType && file.size < 2.5 * 1024 * 1024) return resolve(file);
+        if (s === 1 && okType && file.size < 1.5 * 1024 * 1024) return resolve(file);
+        // 大きく縮めるときは半分ずつ縮小すると、ギザギザ（かくかく）になりにくい
+        let src = img, cw = w, ch = h;
+        const tw = Math.round(w * s), th = Math.round(h * s);
+        while (cw / 2 >= tw) {
+          const c = document.createElement('canvas');
+          c.width = Math.round(cw / 2); c.height = Math.round(ch / 2);
+          const x = c.getContext('2d'); x.imageSmoothingQuality = 'high';
+          x.drawImage(src, 0, 0, c.width, c.height);
+          src = c; cw = c.width; ch = c.height;
+        }
         const c = document.createElement('canvas');
-        c.width = Math.round(img.naturalWidth * s);
-        c.height = Math.round(img.naturalHeight * s);
+        c.width = tw; c.height = th;
         const ctx = c.getContext('2d');
-        ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, c.width, c.height);
-        ctx.drawImage(img, 0, 0, c.width, c.height);
-        c.toBlob(b => b ? resolve(b) : reject(), 'image/jpeg', 0.88);
+        ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, tw, th);
+        ctx.imageSmoothingQuality = 'high';
+        ctx.drawImage(src, 0, 0, tw, th);
+        const type = canWebp && state.webpOk ? 'image/webp' : 'image/jpeg';
+        c.toBlob(b => {
+          if (!b) return reject();
+          // 変換しても元より大きくなるなら、元の画像を使う
+          resolve(s === 1 && okType && b.size >= file.size ? file : b);
+        }, type, type === 'image/webp' ? 0.9 : 0.92);
       };
       img.onerror = () => { URL.revokeObjectURL(url); reject(); };
       img.src = url;
@@ -445,7 +465,7 @@
       if (!it) { if (i < 3) fd.append('order[]', 'e:'); continue; }
       if (it.kind === 'old') { fd.append('keep[]', it.name); fd.append('order[]', 'k:' + it.name); }
       else {
-        const ext = (it.blob.type.split('/')[1] || 'jpg').replace('jpeg', 'jpg');
+        const ext = ({ 'image/png': 'png', 'image/webp': 'webp', 'image/gif': 'gif' })[it.blob.type] || 'jpg';
         fd.append('images[]', it.blob, `img${n}.${ext}`);
         fd.append('order[]', 'n:' + n++);
       }

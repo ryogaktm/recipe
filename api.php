@@ -42,6 +42,7 @@ function delete_images($uid, $files) {
     foreach ($files as $f) {
         $p = UPLOAD_DIR . "/$uid/" . basename($f);
         if ($f !== '' && is_file($p)) @unlink($p);
+        if ($f !== '' && is_file(thumb_path($uid, $f))) @unlink(thumb_path($uid, $f));
     }
 }
 function public_user($u) { return ['id' => $u['id'], 'name' => $u['name']]; }
@@ -106,7 +107,9 @@ case 'list':
                     'recipe' => ['id' => $r['id'], 'title' => $r['title'], 'memo' => $r['memo'] ?? '', 'images' => $r['images'], 'category_names' => $cn]];
     }
     $res = ['me' => ['id' => $uid, 'name' => $me['name'], 'admin' => !empty($me['admin'])],
-            'recipes' => array_map('strip_private', $recipes), 'categories' => $categories, 'inbox' => $inbox];
+            'recipes' => array_map('strip_private', $recipes), 'categories' => $categories, 'inbox' => $inbox,
+            // サーバーでWebPのサムネイルが作れるか（作れなければブラウザ側はJPEGで送る）
+            'webp_ok' => function_exists('imagecreatefromwebp') && function_exists('gd_info') && !empty(gd_info()['WebP Support'])];
     if (!empty($me['admin'])) {
         $res['settings'] = app_settings();
         $res['user_count'] = count(load_json('users'));
