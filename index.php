@@ -84,7 +84,7 @@ $h = function ($s) { return htmlspecialchars((string)$s, ENT_QUOTES); };
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@500;700;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=6">
+<link rel="stylesheet" href="style.css?v=7">
 </head>
 <body>
 <?php if (!$me): ?>
@@ -161,6 +161,7 @@ $h = function ($s) { return htmlspecialchars((string)$s, ENT_QUOTES); };
         <p class="from-line inbox-only" id="viewFrom"></p>
         <h2 id="viewTitle"></h2>
         <div class="chips" id="viewCats"></div>
+        <div class="memo-box" id="viewMemo" hidden><span class="memo-label">備考・メモ</span><div class="memo-text" id="viewMemoText"></div></div>
         <div class="view-images" id="viewImages"></div>
         <div class="inbox-only inbox-actions">
           <button class="btn primary block" id="importBtn">自分のレシピに保存</button>
@@ -195,6 +196,9 @@ $h = function ($s) { return htmlspecialchars((string)$s, ENT_QUOTES); };
             <span>＋<br>イメージを追加</span>
           </label>
         </div>
+
+        <label class="field-label" for="fMemo">備考・メモ <span class="hint">（コツ・アレンジ・出典URLなど）</span></label>
+        <textarea id="fMemo" class="input textarea" rows="4" maxlength="2000" placeholder="例：砂糖は大さじ1に減らすとちょうどいい"></textarea>
 
         <label class="field-label">カテゴリ <span class="hint">（タップで選択・複数OK）</span></label>
         <div class="chips selectable" id="fCats"></div>
@@ -346,7 +350,7 @@ $h = function ($s) { return htmlspecialchars((string)$s, ENT_QUOTES); };
   <div class="lightbox" id="lightbox" hidden><img alt=""></div>
 
   <div class="toast" id="toast" hidden></div>
-  <script src="app.js?v=6"></script>
+  <script src="app.js?v=7"></script>
 <?php endif; ?>
 </body>
 </html>

@@ -452,3 +452,14 @@ body:not(.inbox-mode) .inbox-only { display: none !important; }
 
 /* ログイン画面のボタンは緑背景の上なのでクリーム色に */
 .login-card .btn.primary { background: var(--cream); color: var(--green-dk); box-shadow: 0 4px 0 rgba(0,0,0,.15); }
+
+/* ===== 備考・メモ ===== */
+.textarea { height: auto; min-height: 104px; padding: 11px 13px; line-height: 1.6; resize: vertical; }
+.memo-box {
+  position: relative; margin: 0 0 14px; padding: 14px 14px 12px; border-radius: 12px;
+  background: #fff8d9; border: 1px solid #f1e2a6; box-shadow: 0 1px 0 #efe3b4;
+}
+.memo-box[hidden] { display: none; }
+.memo-label { display: block; font-size: 11px; font-weight: 800; color: #9a7b12; margin-bottom: 4px; }
+.memo-text { white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.7; font-size: 15px; }
+.memo-text a { color: var(--green-dk); }

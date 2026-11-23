@@ -36,7 +36,7 @@ $img = function ($f) use ($owner, $key, $h) { return 'image.php?o=' . $h($owner)
 <link rel="icon" type="image/png" href="icons/favicon-64.png?v=2">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png?v=2">
 <link href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@500;700;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=6">
+<link rel="stylesheet" href="style.css?v=7">
 </head>
 <body class="share-page">
   <header class="top">
@@ -51,6 +51,9 @@ $img = function ($f) use ($owner, $key, $h) { return 'image.php?o=' . $h($owner)
     <p class="from-line"><?= $h($ownerName) ?> さんが共有したレシピ</p>
     <h2 class="share-h"><?= $h($recipe['title']) ?></h2>
     <?php if ($cats): ?><div class="chips"><?php foreach ($cats as $c): ?><span class="chip"><?= $h($c) ?></span><?php endforeach; ?></div><?php endif; ?>
+    <?php if (!empty($recipe['memo'])): ?>
+      <div class="memo-box"><span class="memo-label">備考・メモ</span><div class="memo-text"><?= preg_replace('~(https?://[^\s<]+)~', '<a href="$1" target="_blank" rel="noopener">$1</a>', $h($recipe['memo'])) ?></div></div>
+    <?php endif; ?>
     <div class="view-images share-images">
       <?php $roles = ['材料', '作り方', '表紙']; foreach ($recipe['images'] as $i => $f): if ($f === '') continue; ?>
         <figure class="img-block"><figcaption class="img-role r<?= min($i, 3) ?>"><?= $roles[$i] ?? 'イメージ' ?></figcaption><img src="<?= $img($f) ?>" alt="" loading="lazy"></figure>

@@ -43,6 +43,18 @@
   const isPC = matchMedia('(hover: hover) and (pointer: fine)').matches;
   const catName = (id) => (state.categories.find(c => c.id === id) || {}).name;
 
+  // メモ内のURLをリンクにする（それ以外はテキストのまま）
+  function linkify(text) {
+    const out = [];
+    let last = 0;
+    for (const m of text.matchAll(/https?:\/\/[^\s<>"]+/g)) {
+      if (m.index > last) out.push(text.slice(last, m.index));
+      out.push(el('a', { href: m[0], target: '_blank', rel: 'noopener' }, m[0]));
+      last = m.index + m[0].length;
+    }
+    if (last < text.length) out.push(text.slice(last));
+    return out;
+  }
   function toast(msg) {
     const t = $('#toast');
     t.textContent = msg; t.hidden = false;
@@ -79,7 +91,7 @@
   function items() {
     if (state.mode === 'inbox') {
       return state.inbox.map(x => ({
-        id: x.share_id, title: x.recipe.title, images: x.recipe.images, owner: x.from.id,
+        id: x.share_id, title: x.recipe.title, memo: x.recipe.memo || '', images: x.recipe.images, owner: x.from.id,
         catNames: x.recipe.category_names, from: x.from, recipeId: x.recipe.id, categories: [],
       }));
     }
@@ -92,7 +104,7 @@
     const q = state.query.trim().toLowerCase();
     const all = items();
     const list = all.filter(r =>
-      (!q || r.title.toLowerCase().includes(q) || (r.from && r.from.name.toLowerCase().includes(q))) &&
+      (!q || r.title.toLowerCase().includes(q) || (r.memo || '').toLowerCase().includes(q) || (r.from && r.from.name.toLowerCase().includes(q))) &&
       (state.mode === 'inbox' || [...state.filter].every(id => r.categories.includes(id)))
     );
     state.visible = list;
@@ -187,6 +199,8 @@
     if (dir) { void body.offsetWidth; body.classList.add(dir > 0 ? 'slide-l' : 'slide-r'); }
     $('#viewTitle').textContent = r.title;
     $('#viewFrom').textContent = r.from ? `${r.from.name} さんから共有されたレシピ` : '';
+    $('#viewMemo').hidden = !r.memo;
+    $('#viewMemoText').replaceChildren(...linkify(r.memo || ''));
     $('#viewCats').replaceChildren(...r.catNames.map(n => el('span', { class: 'chip' }, n)));
     $('#viewImages').replaceChildren(...r.images.flatMap((n, i) => !n ? [] :
       el('figure', { class: 'img-block' },
@@ -249,6 +263,7 @@
     state.edit = { id: r ? r.id : '', items, cats: new Set(r ? r.categories : [...state.filter]) };
     $('#editHeading').textContent = r ? 'レシピを編集' : 'レシピを追加';
     $('#fTitle').value = r ? r.title : '';
+    $('#fMemo').value = r ? (r.memo || '') : '';
     $('#newCat').value = '';
     renderThumbs(); renderCatPicker();
     openModal('#editModal');
@@ -423,6 +438,7 @@
     const fd = new FormData();
     fd.append('id', ed.id);
     fd.append('title', title);
+    fd.append('memo', $('#fMemo').value);
     ed.cats.forEach(c => fd.append('categories[]', c));
     let n = 0;
     for (const [i, it] of ed.items.entries()) {

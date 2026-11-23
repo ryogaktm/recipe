@@ -79,7 +79,7 @@ function copy_recipe_to($uid, $ownerId, $src, &$recipes, &$categories) {
     while ($images && end($images) === '') array_pop($images);
     if (!array_filter($images)) fail('画像をコピーできませんでした');
     $now = date('c');
-    $rec = ['id' => new_id('r'), 'title' => $src['title'], 'categories' => array_values(array_unique($myCats)),
+    $rec = ['id' => new_id('r'), 'title' => $src['title'], 'memo' => $src['memo'] ?? '', 'categories' => array_values(array_unique($myCats)),
             'images' => $images, 'created' => $now, 'updated' => $now, 'from' => $ownerId];
     array_unshift($recipes, $rec);
     return $rec;
@@ -103,7 +103,7 @@ case 'list':
         foreach ($r['categories'] as $cid) foreach ($cache[$s['from']]['c'] as $c) if ($c['id'] === $cid) $cn[] = $c['name'];
         $inbox[] = ['share_id' => $s['id'], 'from' => ['id' => $s['from'], 'name' => user_name($s['from'])],
                     'created' => $s['created'], 'seen' => !empty($s['seen']),
-                    'recipe' => ['id' => $r['id'], 'title' => $r['title'], 'images' => $r['images'], 'category_names' => $cn]];
+                    'recipe' => ['id' => $r['id'], 'title' => $r['title'], 'memo' => $r['memo'] ?? '', 'images' => $r['images'], 'category_names' => $cn]];
     }
     $res = ['me' => ['id' => $uid, 'name' => $me['name'], 'admin' => !empty($me['admin'])],
             'recipes' => array_map('strip_private', $recipes), 'categories' => $categories, 'inbox' => $inbox];
@@ -117,6 +117,9 @@ case 'save_recipe':
     $id    = (string)($_POST['id'] ?? '');
     $title = clean_name($_POST['title'] ?? '', 100);
     if ($title === '') fail('タイトルを入力してください');
+    // 備考・メモ（改行OK、2000文字まで）
+    $memo = str_replace(["\r\n", "\r"], "\n", trim((string)($_POST['memo'] ?? '')));
+    $memo = mb_substr($memo, 0, 2000);
     $cats = array_values(array_unique(array_intersect((array)($_POST['categories'] ?? []), $catIds)));
 
     $idx = $id !== '' ? find_index($recipes, $id) : -1;
@@ -161,10 +164,10 @@ case 'save_recipe':
 
     $now = date('c');
     if ($idx >= 0) {
-        $recipes[$idx] = array_merge($recipes[$idx], ['title' => $title, 'categories' => $cats, 'images' => $images, 'updated' => $now]);
+        $recipes[$idx] = array_merge($recipes[$idx], ['title' => $title, 'memo' => $memo, 'categories' => $cats, 'images' => $images, 'updated' => $now]);
         $saved = $recipes[$idx];
     } else {
-        $saved = ['id' => new_id('r'), 'title' => $title, 'categories' => $cats, 'images' => $images, 'created' => $now, 'updated' => $now];
+        $saved = ['id' => new_id('r'), 'title' => $title, 'memo' => $memo, 'categories' => $cats, 'images' => $images, 'created' => $now, 'updated' => $now];
         array_unshift($recipes, $saved);
     }
     save_user($uid, 'recipes', $recipes);
