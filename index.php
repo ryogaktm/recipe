@@ -248,12 +248,6 @@ $h = function ($s) { return htmlspecialchars((string)$s, ENT_QUOTES); };
         </div>
       </div>
       <div class="crop-tools">
-        <div class="crop-ratios" id="cropRatios">
-          <button type="button" data-r="0" class="on">自由</button>
-          <button type="button" data-r="0.75">3:4</button>
-          <button type="button" data-r="1">1:1</button>
-          <button type="button" data-r="1.3333">4:3</button>
-        </div>
         <div class="crop-actions">
           <button type="button" class="btn small" id="cropRotate">↻ 回転</button>
           <button type="button" class="btn small" id="cropReset">元に戻す</button>
@@ -399,7 +393,7 @@ $h = function ($s) { return htmlspecialchars((string)$s, ENT_QUOTES); };
   <div class="lightbox" id="lightbox" hidden><img alt=""></div>
 
   <div class="toast" id="toast" hidden></div>
-  <script src="app.js?v=10"></script>
+  <script src="app.js?v=11"></script>
 <?php endif; ?>
 </body>
 </html>

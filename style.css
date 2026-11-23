@@ -531,8 +531,5 @@ body:not(.inbox-mode) .inbox-only { display: none !important; }
 .crop-box i[data-h=sw] { left: -14px; bottom: -14px; cursor: nesw-resize; }
 .crop-box i[data-h=w]  { left: -14px; top: calc(50% - 14px); cursor: ew-resize; }
 .crop-tools { padding: 10px 12px calc(env(safe-area-inset-bottom) + 12px); display: flex; flex-direction: column; gap: 10px; align-items: center; }
-.crop-ratios { display: flex; gap: 6px; background: #262626; padding: 4px; border-radius: 999px; }
-.crop-ratios button { border: 0; background: none; color: #bbb; height: 38px; padding: 0 14px; border-radius: 999px; font-weight: 700; }
-.crop-ratios button.on { background: #fff; color: #111; }
 .crop-actions { display: flex; gap: 10px; }
 .crop-actions .btn { background: #333; color: #fff; }
