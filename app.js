@@ -9,6 +9,7 @@
     filter: new Set(),   // 選択中カテゴリ（AND条件）
     query: '',
     current: null,       // 詳細表示中のレシピ
+    visible: [],         // いま一覧に出ているレシピ（前後移動に使う）
     edit: null,          // { id, items:[{kind:'old',name}|{kind:'new',blob,url}], cats:Set }
   };
 
@@ -32,6 +33,7 @@
     return json;
   }
   const imgUrl = (name) => 'image.php?f=' + encodeURIComponent(name);
+  const isPC = matchMedia('(hover: hover) and (pointer: fine)').matches;
   const catName = (id) => (state.categories.find(c => c.id === id) || {}).name;
 
   function toast(msg) {
@@ -66,6 +68,7 @@
       (!q || r.title.toLowerCase().includes(q)) &&
       [...state.filter].every(id => r.categories.includes(id))
     );
+    state.visible = list;
     const grid = $('#grid');
     grid.replaceChildren(...list.map(card));
     $('#empty').hidden = state.recipes.length > 0;
@@ -79,11 +82,11 @@
     for (const r of state.recipes) for (const c of r.categories) counts[c] = (counts[c] || 0) + 1;
     const bar = $('#filterBar');
     const all = el('button', { class: 'fchip' + (state.filter.size ? '' : ' on'), onclick: () => { state.filter.clear(); render(); } }, 'すべて');
-    const chips = state.categories.map(c =>
+    const chips = state.categories.map((c, i) =>
       el('button', {
         class: 'fchip' + (state.filter.has(c.id) ? ' on' : ''),
         onclick: () => { state.filter.has(c.id) ? state.filter.delete(c.id) : state.filter.add(c.id); render(); },
-      }, c.name, el('span', { class: 'n' }, String(counts[c.id] || 0)))
+      }, i < 9 ? el('span', { class: 'k' }, String(i + 1)) : null, c.name, el('span', { class: 'n' }, String(counts[c.id] || 0)))
     );
     const manage = el('button', { class: 'fchip ghost', onclick: openCatManager }, '⚙ カテゴリ');
     bar.replaceChildren(all, ...chips, manage);
@@ -118,10 +121,17 @@
   });
 
   // ---------- 詳細 ----------
-  function openView(id) {
+  function openView(id, dir) {
     const r = state.recipes.find(x => x.id === id);
     if (!r) return;
     state.current = r;
+    const idx = state.visible.findIndex(x => x.id === id);
+    $('#prevBtn').disabled = idx <= 0;
+    $('#nextBtn').disabled = idx < 0 || idx >= state.visible.length - 1;
+    $('#viewPos').textContent = idx >= 0 ? `${idx + 1} / ${state.visible.length}` : '';
+    const body = $('#viewModal .view-body');
+    body.classList.remove('slide-l', 'slide-r');
+    if (dir) { void body.offsetWidth; body.classList.add(dir > 0 ? 'slide-l' : 'slide-r'); }
     $('#viewTitle').textContent = r.title;
     $('#viewCats').replaceChildren(...r.categories.map(catName).filter(Boolean).map(n => el('span', { class: 'chip' }, n)));
     $('#viewImages').replaceChildren(...r.images.map(n =>
@@ -130,6 +140,26 @@
     $('#viewModal .view-body').scrollTop = 0;
     openModal('#viewModal');
   }
+  function step(d) {
+    if (!state.current) return;
+    const idx = state.visible.findIndex(x => x.id === state.current.id);
+    const next = state.visible[idx + d];
+    if (idx >= 0 && next) openView(next.id, d);
+  }
+  $('#prevBtn').addEventListener('click', () => step(-1));
+  $('#nextBtn').addEventListener('click', () => step(1));
+  // スマホ：左右スワイプで前後のレシピへ
+  (() => {
+    const body = $('#viewModal .view-body');
+    let sx = 0, sy = 0, st = 0;
+    body.addEventListener('touchstart', e => { if (e.touches.length !== 1) return; sx = e.touches[0].clientX; sy = e.touches[0].clientY; st = Date.now(); }, { passive: true });
+    body.addEventListener('touchend', e => {
+      if (!st) return;
+      const dx = e.changedTouches[0].clientX - sx, dy = e.changedTouches[0].clientY - sy;
+      const fast = Date.now() - st < 600; st = 0;
+      if (fast && Math.abs(dx) > 70 && Math.abs(dx) > Math.abs(dy) * 1.6) step(dx < 0 ? 1 : -1);
+    }, { passive: true });
+  })();
   $('#editBtn').addEventListener('click', () => { closeModal('#viewModal'); openEdit(state.current); });
   $('#deleteBtn').addEventListener('click', async () => {
     const r = state.current;
@@ -163,7 +193,8 @@
     $('#newCat').value = '';
     renderThumbs(); renderCatPicker();
     openModal('#editModal');
-    if (!r) setTimeout(() => $('#fTitle').focus(), 50);
+    // スマホでは自動でキーボードを出さない
+    if (!r && isPC) setTimeout(() => $('#fTitle').focus(), 50);
   }
   function cleanupEdit() {
     if (!state.edit) return;
@@ -177,13 +208,14 @@
     $('#thumbs').replaceChildren(...items.map((it, i) =>
       el('div', { class: 'tb' },
         el('img', { src: it.kind === 'old' ? imgUrl(it.name) : it.url, alt: '' }),
+        items.length > 1 ? el('span', { class: 'no' }, String(i + 1)) : null,
         el('button', { type: 'button', class: 'x', title: '外す', onclick: () => {
           if (it.kind === 'new') URL.revokeObjectURL(it.url);
           items.splice(i, 1); renderThumbs();
         } }, '✕'),
         items.length > 1 ? el('div', { class: 'mv' },
           i > 0 ? el('button', { type: 'button', onclick: () => move(i, -1) }, '◀') : null,
-          i < items.length - 1 ? el('button', { type: 'button', onclick: () => move(i, 1) }, '▶') : null
+          i < items.length - 1 ? el('button', { type: 'button', class: 'r', onclick: () => move(i, 1) }, '▶') : null
         ) : null
       )
     ));
@@ -238,9 +270,17 @@
   ['dragleave', 'drop'].forEach(t => drop.addEventListener(t, e => { e.preventDefault(); drop.classList.remove('over'); }));
   drop.addEventListener('drop', e => addFiles(e.dataTransfer.files));
   document.addEventListener('paste', e => {
-    if ($('#editModal').hidden) return;
-    const files = [...(e.clipboardData?.files || [])];
-    if (files.length) { e.preventDefault(); addFiles(files); }
+    const files = [...(e.clipboardData?.files || [])].filter(f => f.type.startsWith('image/'));
+    if (!files.length) return;
+    if ($('#editModal').hidden) {
+      // 一覧などで画像を貼り付けたら、そのまま新規追加を開く
+      if (!$('#catModal').hidden) return;
+      e.preventDefault();
+      $('#lightbox').hidden = true;
+      closeModal('#viewModal'); closeModal('#helpModal');
+      openEdit(null);
+    } else e.preventDefault();
+    addFiles(files);
   });
 
   // 大きすぎる画像は横幅1600pxまで縮小（縦長のスクショは高さをそのまま活かす）
@@ -347,12 +387,86 @@
 
   // ---------- 検索 ----------
   $('#q').addEventListener('input', e => { state.query = e.target.value; render(); });
+  // ---------- ショートカット ----------
+  const isOpen = id => !$(id).hidden;
+  const typing = () => {
+    const a = document.activeElement;
+    return a && (a.tagName === 'INPUT' || a.tagName === 'TEXTAREA' || a.isContentEditable);
+  };
+  function closeAll() {
+    $('#lightbox').hidden = true;
+    if (isOpen('#editModal')) cleanupEdit();
+    ['#helpModal', '#catModal', '#editModal', '#viewModal'].forEach(closeModal);
+  }
+  function openHelp() { openModal('#helpModal'); }
+  $('#helpBtn').addEventListener('click', openHelp);
+  function focusSearch() { closeAll(); const q = $('#q'); q.focus(); q.select(); }
+  function toggleCat(n) {
+    const c = state.categories[n - 1];
+    if (!c) return;
+    state.filter.has(c.id) ? state.filter.delete(c.id) : state.filter.add(c.id);
+    render();
+    toast(state.filter.size ? '絞り込み：' + [...state.filter].map(catName).join(' × ') : 'すべて表示');
+  }
+
   document.addEventListener('keydown', e => {
-    if (e.key !== 'Escape') return;
-    if (!$('#lightbox').hidden) return $('#lightbox').hidden = true;
-    for (const id of ['#catModal', '#editModal', '#viewModal']) {
-      if (!$(id).hidden) { if (id === '#editModal') cleanupEdit(); return closeModal(id); }
+    const mod = e.ctrlKey || e.metaKey;
+    const k = e.key;
+
+    // Ctrl + ＋ ：レシピを追加（日本語キーボードの ; ＋ キー、テンキーの＋にも対応）
+    if (mod && !e.altKey && (k === '+' || k === '=' || k === ';' || e.code === 'NumpadAdd')) {
+      e.preventDefault();
+      if (isOpen('#editModal')) return $('#fTitle').focus();
+      closeAll(); openEdit(null);
+      return;
     }
+    // Ctrl + S / Ctrl + Enter ：保存
+    if (mod && (k === 's' || k === 'S' || k === 'Enter')) {
+      if (isOpen('#editModal')) { e.preventDefault(); $('#editForm').requestSubmit($('#saveBtn')); }
+      else if (k !== 'Enter') e.preventDefault();
+      return;
+    }
+    // Ctrl + K ：検索
+    if (mod && (k === 'k' || k === 'K')) { e.preventDefault(); focusSearch(); return; }
+
+    if (k === 'Escape') {
+      if (isOpen('#lightbox')) return $('#lightbox').hidden = true;
+      if (isOpen('#helpModal')) return closeModal('#helpModal');
+      if (isOpen('#catModal')) return closeModal('#catModal');
+      if (isOpen('#editModal')) { cleanupEdit(); return closeModal('#editModal'); }
+      if (isOpen('#viewModal')) return closeModal('#viewModal');
+      if ($('#q').value) { $('#q').value = ''; state.query = ''; render(); }
+      else if (document.activeElement === $('#q')) $('#q').blur();
+      return;
+    }
+
+    // 検索欄で Enter → 先頭のレシピを開く
+    if (k === 'Enter' && document.activeElement === $('#q') && !e.isComposing) {
+      e.preventDefault();
+      if (state.visible[0]) { $('#q').blur(); openView(state.visible[0].id); }
+      return;
+    }
+
+    if (mod || e.altKey || e.isComposing || typing()) return;
+
+    if (isOpen('#lightbox')) return;
+    if (k === '?') { e.preventDefault(); return isOpen('#helpModal') ? closeModal('#helpModal') : openHelp(); }
+    if (isOpen('#helpModal') || isOpen('#catModal') || isOpen('#editModal')) return;
+
+    if (isOpen('#viewModal')) {
+      if (k === 'ArrowLeft') { e.preventDefault(); step(-1); }
+      else if (k === 'ArrowRight') { e.preventDefault(); step(1); }
+      else if (k === 'e' || k === 'E') { e.preventDefault(); $('#editBtn').click(); }
+      else if (k === 'Delete' || k === 'Backspace') { e.preventDefault(); $('#deleteBtn').click(); }
+      return;
+    }
+
+    // 一覧画面
+    if (k === '/') { e.preventDefault(); focusSearch(); }
+    else if (k === 'n' || k === 'N') { e.preventDefault(); openEdit(null); }
+    else if (k === 'c' || k === 'C') { e.preventDefault(); openCatManager(); }
+    else if (k === '0') { state.filter.clear(); render(); toast('すべて表示'); }
+    else if (/^[1-9]$/.test(k)) toggleCat(+k);
   });
 
   load().catch(e => toast(e.message));
