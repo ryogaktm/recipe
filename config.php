@@ -21,7 +21,13 @@ function csrf_token(): string {
     return $_SESSION['csrf'];
 }
 function ensure_dirs(): void {
-    foreach ([DATA_DIR, UPLOAD_DIR] as $d) if (!is_dir($d)) mkdir($d, 0775, true);
+    // data/ と uploads/ は外から直接見られないようにする（.htaccess を自動作成）
+    $deny = "<IfModule mod_authz_core.c>\n  Require all denied\n</IfModule>\n"
+          . "<IfModule !mod_authz_core.c>\n  Order allow,deny\n  Deny from all\n</IfModule>\n";
+    foreach ([DATA_DIR, UPLOAD_DIR] as $d) {
+        if (!is_dir($d)) mkdir($d, 0775, true);
+        if (!is_file("$d/.htaccess")) file_put_contents("$d/.htaccess", $deny);
+    }
 }
 function load_json(string $name): array {
     $f = DATA_DIR . "/$name.json";

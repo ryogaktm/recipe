@@ -21,3 +21,8 @@ PHP 8 以上。DB不要（data/ にJSONで保存）。
 - .user.ini … アップロード上限（サーバーによっては管理画面で設定）
 
 ※ Apache 以外（nginx 等）の場合は data/ と uploads/ への直接アクセスを設定で禁止してください。
+
+## 自動デプロイ
+main に push すると GitHub Actions が FTP で `/public_html/recipe/` にアップロードします
+（Secrets: FTP_SERVER / FTP_USERNAME / FTP_PASSWORD）。
+サーバー上の data/ と uploads/ はデプロイ対象外なので、保存したレシピは消えません。
