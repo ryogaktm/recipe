@@ -299,6 +299,90 @@ kbd {
 .login-card .btn { height: 50px; }
 .login-card .err { color: #fff3a8; margin: 0; font-weight: 700; }
 
+
+/* ===== アカウント・共有 ===== */
+.avatar {
+  position: relative; flex: none; width: 38px; height: 38px; border-radius: 50%; border: 0;
+  background: var(--cream); color: var(--green-dk); font-weight: 800; font-size: 17px;
+  display: inline-flex; align-items: center; justify-content: center;
+  box-shadow: 0 2px 0 rgba(0,0,0,.12);
+}
+.avatar.big { width: 52px; height: 52px; font-size: 22px; background: var(--green); color: #fff; box-shadow: none; }
+.avatar .dot {
+  position: absolute; top: -1px; right: -1px; width: 12px; height: 12px; border-radius: 50%;
+  background: #ff5a4e; border: 2px solid var(--green);
+}
+.avatar .dot[hidden] { display: none; }
+.own-only, .inbox-only { }
+body.inbox-mode .own-only { display: none !important; }
+body:not(.inbox-mode) .inbox-only { display: none !important; }
+.head-actions { display: flex; gap: 8px; align-items: center; }
+.share-ic { display: inline-flex; align-items: center; justify-content: center; }
+.from-line { margin: 0 0 6px; font-size: 13px; color: var(--green-dk); font-weight: 700; }
+.inbox-actions { margin-top: 20px; }
+.inbox-actions .danger-text { margin-top: 14px; }
+.card .from { margin: 0 0 3px; font-size: 11px; color: var(--green-dk); font-weight: 700; }
+.fchip.inbox-chip { background: #fff; }
+.fchip.inbox-chip.new { background: #ffe1dc; color: #b3261e; box-shadow: inset 0 0 0 2px #ff8a7e; }
+
+.sheet.small-sheet { height: auto; max-height: calc(100% - 40px - env(safe-area-inset-top)); }
+.share-title { margin: 0 0 4px; font-weight: 800; font-size: 17px; }
+.sec { margin: 20px 0 4px; font-size: 14px; color: var(--green-dk); }
+.sec + .hint { display: block; margin: 0 0 10px; line-height: 1.6; }
+.link-row { display: flex; gap: 8px; }
+.link-row .input { height: var(--tap); font-size: 14px; color: var(--sub); }
+.link-actions { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+.btn.ghost-red { background: transparent; color: var(--red); box-shadow: inset 0 0 0 1.5px #f3c3bf; }
+.share-users { list-style: none; margin: 10px 0 0; padding: 0; }
+.share-users li { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 0; border-bottom: 1px solid var(--line); font-weight: 700; }
+.share-users .btn { height: 36px; }
+
+.me-row { display: flex; align-items: center; gap: 14px; margin-bottom: 12px; }
+.me-row b { font-size: 18px; }
+.me-row .hint { margin: 2px 0 0; }
+.menu-item {
+  display: flex; align-items: center; justify-content: space-between; width: 100%;
+  min-height: 52px; padding: 0 4px; border: 0; border-bottom: 1px solid var(--line);
+  background: none; color: var(--ink); font-size: 16px; font-weight: 700; text-align: left;
+  text-decoration: none; cursor: pointer; list-style: none;
+}
+.menu-item[hidden] { display: none; }
+.menu-item::-webkit-details-marker { display: none; }
+.menu-item::after { content: '›'; color: var(--sub); font-size: 22px; font-weight: 500; }
+.menu-details[open] > .menu-item::after { transform: rotate(90deg); }
+.badge-n { margin-left: auto; margin-right: 8px; background: var(--green); color: #fff; font-size: 12px; border-radius: 999px; padding: 1px 9px; }
+.badge-n:empty { display: none; }
+.stack-form { display: flex; flex-direction: column; gap: 10px; padding: 12px 0 16px; }
+.stack-form .field-label { margin: 6px 0 0; }
+.check { display: flex; align-items: center; gap: 10px; font-weight: 700; min-height: var(--tap); }
+.check input { width: 22px; height: 22px; accent-color: var(--green); }
+.install-hint { margin: 18px 0 6px; padding: 14px; border-radius: 14px; background: #eef7f0; }
+.install-hint[hidden] { display: none; }
+.install-hint .hint { display: block; margin: 6px 0 10px; line-height: 1.6; }
+.logout-item { color: var(--red); border-bottom: 0; margin-top: 8px; }
+.logout-item::after { content: none; }
+.pc-only-flex { display: none; }
+
+/* ===== ログイン画面 ===== */
+.login-icon { width: 96px; height: 96px; border-radius: 22px; margin: 0 auto -4px; box-shadow: 0 8px 20px rgba(0,0,0,.2); }
+.login-card .logo { font-size: 40px; margin-bottom: 4px; }
+.auth-tabs { display: flex; background: rgba(0,0,0,.15); border-radius: 999px; padding: 4px; }
+.auth-tabs a { flex: 1; text-align: center; padding: 9px 0; border-radius: 999px; color: var(--cream); text-decoration: none; font-weight: 700; }
+.auth-tabs a.on { background: var(--cream); color: var(--green-dk); }
+.login-note { color: var(--cream); margin: 0; font-weight: 700; }
+.login-note.small { font-size: 12px; font-weight: 500; opacity: .9; line-height: 1.6; }
+
+/* ===== 共有ページ ===== */
+.share-page .top-inner { justify-content: center; padding-bottom: 12px; }
+.share-page a.logo { text-decoration: none; }
+.share-wrap { max-width: 720px; padding-top: 18px; }
+.share-h { margin: 0 0 10px; font-size: 22px; }
+.share-wrap .chips { margin-bottom: 14px; }
+.share-images img { cursor: zoom-in; }
+.share-cta { margin: 22px 0 10px; text-align: center; }
+.share-cta .hint { display: block; margin: 10px 0; }
+.btn.linkbtn { display: flex; align-items: center; justify-content: center; text-decoration: none; }
+
 /* ===== タブレット以上 ===== */
 @media (min-width: 600px) {
   .logo { font-size: 26px; }
@@ -312,6 +396,7 @@ kbd {
 /* ===== PC（マウス操作）向け ===== */
 @media (hover: hover) and (pointer: fine) {
   .help-btn { display: block; }
+  .pc-only-flex { display: flex; }
   .pc-only { display: block; }
   .kbd-hint { display: inline; }
   .fchip .k { display: inline; margin-right: 5px; font-size: 11px; opacity: .45; font-weight: 500; }
@@ -320,9 +405,12 @@ kbd {
 @media (min-width: 760px) {
   .modal { align-items: center; }
   .sheet { max-width: 720px; height: auto; max-height: 92vh; border-radius: 20px; }
-  .sheet.help, .sheet.cats { max-width: 560px; }
+  .sheet.help, .sheet.cats, .sheet.small-sheet { max-width: 560px; }
   .sheet.view { height: 92vh; }
   .view-body, .edit-body { padding: 18px 20px 28px; }
   .view-images { margin: 0; }
   .lightbox img { width: auto; max-width: 100%; margin: 0 auto; }
 }
+
+/* ログイン画面のボタンは緑背景の上なのでクリーム色に */
+.login-card .btn.primary { background: var(--cream); color: var(--green-dk); box-shadow: 0 4px 0 rgba(0,0,0,.15); }

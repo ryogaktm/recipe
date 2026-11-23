@@ -4,8 +4,11 @@
   const CSRF = $('meta[name="csrf-token"]').content;
 
   const state = {
+    me: null,
+    mode: 'mine',        // 'mine' = 自分のレシピ / 'inbox' = 共有されたレシピ
     recipes: [],
     categories: [],
+    inbox: [],
     filter: new Set(),   // 選択中カテゴリ（AND条件）
     query: '',
     current: null,       // 詳細表示中のレシピ
@@ -32,7 +35,7 @@
     }
     return json;
   }
-  const imgUrl = (name) => 'image.php?f=' + encodeURIComponent(name);
+  const imgUrl = (name, owner) => 'image.php?o=' + encodeURIComponent(owner || state.me.id) + '&f=' + encodeURIComponent(name);
   const isPC = matchMedia('(hover: hover) and (pointer: fine)').matches;
   const catName = (id) => (state.categories.find(c => c.id === id) || {}).name;
 
@@ -55,25 +58,46 @@
   // ---------- 一覧 ----------
   async function load() {
     const d = await api('list');
+    state.me = d.me;
     state.recipes = d.recipes;
     state.categories = d.categories;
+    state.inbox = d.inbox;
+    state.settings = d.settings || null;
+    state.userCount = d.user_count || 0;
+    if (state.mode === 'inbox' && !state.inbox.length) state.mode = 'mine';
+    const unseen = state.inbox.filter(x => !x.seen).length;
+    $('#inboxDot').hidden = !unseen;
     for (const id of [...state.filter]) if (!catName(id)) state.filter.delete(id);
     render();
   }
 
+  // 一覧に出すもの（自分のレシピ or 共有されたレシピ）を同じ形にそろえる
+  function items() {
+    if (state.mode === 'inbox') {
+      return state.inbox.map(x => ({
+        id: x.share_id, title: x.recipe.title, images: x.recipe.images, owner: x.from.id,
+        catNames: x.recipe.category_names, from: x.from, recipeId: x.recipe.id, categories: [],
+      }));
+    }
+    return state.recipes.map(r => Object.assign({}, r, { owner: state.me.id, catNames: r.categories.map(catName).filter(Boolean) }));
+  }
+
   function render() {
     renderFilterBar();
+    document.body.classList.toggle('inbox-mode', state.mode === 'inbox');
     const q = state.query.trim().toLowerCase();
-    const list = state.recipes.filter(r =>
-      (!q || r.title.toLowerCase().includes(q)) &&
-      [...state.filter].every(id => r.categories.includes(id))
+    const all = items();
+    const list = all.filter(r =>
+      (!q || r.title.toLowerCase().includes(q) || (r.from && r.from.name.toLowerCase().includes(q))) &&
+      (state.mode === 'inbox' || [...state.filter].every(id => r.categories.includes(id)))
     );
     state.visible = list;
     const grid = $('#grid');
     grid.replaceChildren(...list.map(card));
-    $('#empty').hidden = state.recipes.length > 0;
-    $('#count').textContent = state.recipes.length
-      ? (list.length === state.recipes.length ? `${list.length}件` : `${list.length}件 / 全${state.recipes.length}件`)
+    $('#empty').hidden = all.length > 0;
+    const label = state.mode === 'inbox' ? '共有されたレシピ ' : '';
+    $('#count').textContent = all.length
+      ? label + (list.length === all.length ? `${list.length}件` : `${list.length}件 / 全${all.length}件`)
       : '';
   }
 
@@ -81,6 +105,18 @@
     const counts = {};
     for (const r of state.recipes) for (const c of r.categories) counts[c] = (counts[c] || 0) + 1;
     const bar = $('#filterBar');
+    if (state.mode === 'inbox') {
+      bar.replaceChildren(
+        el('button', { class: 'fchip', onclick: () => setMode('mine') }, '‹ 自分のレシピ'),
+        el('button', { class: 'fchip on' }, '共有された', el('span', { class: 'n' }, String(state.inbox.length)))
+      );
+      return;
+    }
+    const unseen = state.inbox.filter(x => !x.seen).length;
+    const inboxChip = state.inbox.length
+      ? el('button', { class: 'fchip inbox-chip' + (unseen ? ' new' : ''), onclick: () => setMode('inbox') },
+          '共有された', el('span', { class: 'n' }, unseen ? `${unseen}件 new` : String(state.inbox.length)))
+      : null;
     const all = el('button', { class: 'fchip' + (state.filter.size ? '' : ' on'), onclick: () => { state.filter.clear(); render(); } }, 'すべて');
     const chips = state.categories.map((c, i) =>
       el('button', {
@@ -89,18 +125,31 @@
       }, i < 9 ? el('span', { class: 'k' }, String(i + 1)) : null, c.name, el('span', { class: 'n' }, String(counts[c.id] || 0)))
     );
     const manage = el('button', { class: 'fchip ghost', onclick: openCatManager }, '⚙ カテゴリ');
-    bar.replaceChildren(all, ...chips, manage);
+    bar.replaceChildren(all, ...chips, manage, inboxChip);
+  }
+
+  function setMode(m) {
+    state.mode = m;
+    state.query = ''; $('#q').value = '';
+    render();
+    window.scrollTo(0, 0);
+    if (m === 'inbox' && state.inbox.some(x => !x.seen)) {
+      state.inbox.forEach(x => x.seen = true);
+      $('#inboxDot').hidden = true;
+      api('inbox_seen', {}).catch(() => {});
+    }
   }
 
   function card(r) {
     return el('button', { class: 'card', onclick: () => openView(r.id) },
       el('div', { class: 'thumb' },
-        el('img', { src: imgUrl(r.images[0]), loading: 'lazy', alt: '' }),
+        el('img', { src: imgUrl(r.images[0], r.owner), loading: 'lazy', alt: '' }),
         r.images.length > 1 ? el('span', { class: 'badge' }, `${r.images.length}枚`) : null
       ),
       el('div', { class: 'meta' },
+        r.from ? el('p', { class: 'from' }, r.from.name + ' さんから') : null,
         el('p', { class: 'title' }, r.title),
-        el('div', { class: 'chips' }, r.categories.map(id => catName(id)).filter(Boolean).map(n => el('span', { class: 'chip' }, n)))
+        el('div', { class: 'chips' }, r.catNames.map(n => el('span', { class: 'chip' }, n)))
       )
     );
   }
@@ -122,7 +171,7 @@
 
   // ---------- 詳細 ----------
   function openView(id, dir) {
-    const r = state.recipes.find(x => x.id === id);
+    const r = items().find(x => x.id === id);
     if (!r) return;
     state.current = r;
     const idx = state.visible.findIndex(x => x.id === id);
@@ -133,9 +182,10 @@
     body.classList.remove('slide-l', 'slide-r');
     if (dir) { void body.offsetWidth; body.classList.add(dir > 0 ? 'slide-l' : 'slide-r'); }
     $('#viewTitle').textContent = r.title;
-    $('#viewCats').replaceChildren(...r.categories.map(catName).filter(Boolean).map(n => el('span', { class: 'chip' }, n)));
+    $('#viewFrom').textContent = r.from ? `${r.from.name} さんから共有されたレシピ` : '';
+    $('#viewCats').replaceChildren(...r.catNames.map(n => el('span', { class: 'chip' }, n)));
     $('#viewImages').replaceChildren(...r.images.map(n =>
-      el('img', { src: imgUrl(n), alt: '', onclick: () => openLightbox(imgUrl(n)) })
+      el('img', { src: imgUrl(n, r.owner), alt: '', onclick: () => openLightbox(imgUrl(n, r.owner)) })
     ));
     $('#viewModal .view-body').scrollTop = 0;
     openModal('#viewModal');
@@ -160,7 +210,11 @@
       if (fast && Math.abs(dx) > 70 && Math.abs(dx) > Math.abs(dy) * 1.6) step(dx < 0 ? 1 : -1);
     }, { passive: true });
   })();
-  $('#editBtn').addEventListener('click', () => { closeModal('#viewModal'); openEdit(state.current); });
+  $('#editBtn').addEventListener('click', () => {
+    const r = state.recipes.find(x => x.id === state.current.id);
+    if (!r) return;
+    closeModal('#viewModal'); openEdit(r);
+  });
   $('#deleteBtn').addEventListener('click', async () => {
     const r = state.current;
     if (!r || !confirm(`「${r.title}」を削除しますか？\n画像も消えます。`)) return;
@@ -331,6 +385,7 @@
     btn.disabled = true; btn.textContent = '保存中…';
     try {
       const { recipe } = await api('save_recipe', fd);
+      state.mode = 'mine';
       cleanupEdit();
       closeModal('#editModal');
       await load();
@@ -387,6 +442,148 @@
 
   // ---------- 検索 ----------
   $('#q').addEventListener('input', e => { state.query = e.target.value; render(); });
+  // ---------- 共有されたレシピ：保存・外す ----------
+  $('#importBtn').addEventListener('click', async () => {
+    const r = state.current;
+    if (!r || !r.from) return;
+    const btn = $('#importBtn');
+    btn.disabled = true; btn.textContent = '保存中…';
+    try {
+      await api('import', { owner: r.owner, recipe: r.recipeId });
+      await load();
+      toast('自分のレシピに保存しました');
+      btn.textContent = '保存しました';
+    } catch (e) { toast(e.message); btn.disabled = false; btn.textContent = '自分のレシピに保存'; }
+  });
+  $('#dismissBtn').addEventListener('click', async () => {
+    const r = state.current;
+    if (!r || !r.from || !confirm(`「${r.title}」を共有された一覧から外しますか？`)) return;
+    try {
+      await api('share_user_remove', { share_id: r.id });
+      closeModal('#viewModal');
+      await load();
+      toast('外しました');
+    } catch (e) { toast(e.message); }
+  });
+
+  // ---------- 共有シート ----------
+  async function openShare() {
+    const r = state.current;
+    if (!r || r.from) return;
+    $('#shareTitle').textContent = r.title;
+    $('#sendName').value = '';
+    $('#shareUsers').replaceChildren();
+    $('#linkNone').hidden = true; $('#linkSome').hidden = true;
+    openModal('#shareModal');
+    try {
+      const d = await api('share_info&id=' + encodeURIComponent(r.id));
+      renderShare(d);
+    } catch (e) { toast(e.message); }
+  }
+  function renderShare(d) {
+    $('#linkNone').hidden = !!d.link;
+    $('#linkSome').hidden = !d.link;
+    if (d.link) $('#linkUrl').value = d.link;
+    $('#linkSend').hidden = !navigator.share;
+    $('#shareUsers').replaceChildren(...d.users.map(u =>
+      el('li', {}, el('span', {}, u.name + ' さん'),
+        el('button', { class: 'btn small ghost-red', onclick: async () => {
+          if (!confirm(`${u.name} さんへの共有を取り消しますか？`)) return;
+          try { await api('share_user_remove', { share_id: u.share_id }); renderShare(await api('share_info&id=' + encodeURIComponent(state.current.id))); toast('取り消しました'); }
+          catch (e) { toast(e.message); }
+        } }, '取り消す'))
+    ));
+  }
+  $('#shareBtn').addEventListener('click', openShare);
+  $('#linkCreate').addEventListener('click', async () => {
+    try {
+      const d = await api('share_link_create', { id: state.current.id });
+      renderShare(await api('share_info&id=' + encodeURIComponent(state.current.id)));
+      copyText(d.link, '共有リンクを作ってコピーしました');
+    } catch (e) { toast(e.message); }
+  });
+  async function copyText(t, msg) {
+    try { await navigator.clipboard.writeText(t); toast(msg || 'コピーしました'); }
+    catch { $('#linkUrl').select(); toast('リンクを長押ししてコピーしてください'); }
+  }
+  $('#linkCopy').addEventListener('click', () => copyText($('#linkUrl').value));
+  $('#linkUrl').addEventListener('focus', e => e.target.select());
+  $('#linkSend').addEventListener('click', async () => {
+    try { await navigator.share({ title: state.current.title, text: `レシピ「${state.current.title}」`, url: $('#linkUrl').value }); }
+    catch {}
+  });
+  $('#linkStop').addEventListener('click', async () => {
+    if (!confirm('共有リンクを止めますか？\n送ったリンクは開けなくなります。')) return;
+    try {
+      await api('share_link_delete', { id: state.current.id });
+      renderShare(await api('share_info&id=' + encodeURIComponent(state.current.id)));
+      toast('リンクを止めました');
+    } catch (e) { toast(e.message); }
+  });
+  $('#sendForm').addEventListener('submit', async e => {
+    e.preventDefault();
+    const name = $('#sendName').value.trim();
+    if (!name) return $('#sendName').focus();
+    try {
+      const d = await api('share_user_add', { id: state.current.id, name });
+      $('#sendName').value = '';
+      renderShare(await api('share_info&id=' + encodeURIComponent(state.current.id)));
+      toast(`${d.name} さんに送りました`);
+    } catch (e) { toast(e.message); }
+  });
+
+  // ---------- アカウント ----------
+  function openAccount() {
+    const me = state.me;
+    $('#meAvatar').textContent = me.name.slice(0, 1).toUpperCase();
+    $('#meName').textContent = me.name;
+    $('#meRole').textContent = me.admin ? '管理者' : 'ユーザー';
+    $('#inboxCount').textContent = state.inbox.length ? String(state.inbox.length) : '';
+    $('#goInbox').hidden = !state.inbox.length;
+    $('#adminBox').hidden = !me.admin;
+    if (me.admin && state.settings) {
+      $('#setSignup').checked = !!state.settings.signup_open;
+      $('#setInvite').value = state.settings.invite_code || '';
+      $('#userCount').textContent = `登録ユーザー：${state.userCount}人`;
+    }
+    $('#installHint').hidden = isStandalone();
+    $('#installBtn').hidden = !installEvent;
+    openModal('#accountModal');
+  }
+  $('#accountBtn').addEventListener('click', openAccount);
+  $('#goInbox').addEventListener('click', () => { closeModal('#accountModal'); setMode('inbox'); });
+  $('#goCats').addEventListener('click', () => { closeModal('#accountModal'); openCatManager(); });
+  $('#goHelp').addEventListener('click', () => { closeModal('#accountModal'); openModal('#helpModal'); });
+  $('#pwForm').addEventListener('submit', async e => {
+    e.preventDefault();
+    try {
+      await api('change_password', { current: $('#pwCur').value, new: $('#pwNew').value });
+      $('#pwCur').value = ''; $('#pwNew').value = '';
+      e.target.closest('details').open = false;
+      toast('パスワードを変更しました');
+    } catch (err) { toast(err.message); }
+  });
+  $('#adminForm').addEventListener('submit', async e => {
+    e.preventDefault();
+    try {
+      const d = await api('settings_save', { signup_open: $('#setSignup').checked ? '1' : '0', invite_code: $('#setInvite').value.trim() });
+      state.settings = d.settings;
+      toast('設定を保存しました');
+    } catch (err) { toast(err.message); }
+  });
+
+  // ---------- アプリとしてインストール ----------
+  let installEvent = null;
+  const isStandalone = () => matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+  window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); installEvent = e; });
+  $('#installBtn').addEventListener('click', async () => {
+    if (!installEvent) return;
+    installEvent.prompt();
+    await installEvent.userChoice.catch(() => {});
+    installEvent = null; $('#installBtn').hidden = true;
+  });
+  if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
+
   // ---------- ショートカット ----------
   const isOpen = id => !$(id).hidden;
   const typing = () => {
@@ -396,7 +593,7 @@
   function closeAll() {
     $('#lightbox').hidden = true;
     if (isOpen('#editModal')) cleanupEdit();
-    ['#helpModal', '#catModal', '#editModal', '#viewModal'].forEach(closeModal);
+    ['#helpModal', '#shareModal', '#accountModal', '#catModal', '#editModal', '#viewModal'].forEach(closeModal);
   }
   function openHelp() { openModal('#helpModal'); }
   $('#helpBtn').addEventListener('click', openHelp);
@@ -432,6 +629,8 @@
     if (k === 'Escape') {
       if (isOpen('#lightbox')) return $('#lightbox').hidden = true;
       if (isOpen('#helpModal')) return closeModal('#helpModal');
+      if (isOpen('#shareModal')) return closeModal('#shareModal');
+      if (isOpen('#accountModal')) return closeModal('#accountModal');
       if (isOpen('#catModal')) return closeModal('#catModal');
       if (isOpen('#editModal')) { cleanupEdit(); return closeModal('#editModal'); }
       if (isOpen('#viewModal')) return closeModal('#viewModal');
@@ -451,19 +650,23 @@
 
     if (isOpen('#lightbox')) return;
     if (k === '?') { e.preventDefault(); return isOpen('#helpModal') ? closeModal('#helpModal') : openHelp(); }
-    if (isOpen('#helpModal') || isOpen('#catModal') || isOpen('#editModal')) return;
+    if (isOpen('#helpModal') || isOpen('#catModal') || isOpen('#editModal') || isOpen('#shareModal') || isOpen('#accountModal')) return;
 
     if (isOpen('#viewModal')) {
       if (k === 'ArrowLeft') { e.preventDefault(); step(-1); }
       else if (k === 'ArrowRight') { e.preventDefault(); step(1); }
+      else if (state.mode === 'inbox') return;
       else if (k === 'e' || k === 'E') { e.preventDefault(); $('#editBtn').click(); }
+      else if (k === 's' || k === 'S') { e.preventDefault(); openShare(); }
       else if (k === 'Delete' || k === 'Backspace') { e.preventDefault(); $('#deleteBtn').click(); }
       return;
     }
 
     // 一覧画面
     if (k === '/') { e.preventDefault(); focusSearch(); }
+    else if (k === 'i' || k === 'I') { if (state.mode === 'inbox' || state.inbox.length) setMode(state.mode === 'inbox' ? 'mine' : 'inbox'); else toast('共有されたレシピはまだありません'); }
     else if (k === 'n' || k === 'N') { e.preventDefault(); openEdit(null); }
+    else if (state.mode === 'inbox') return;
     else if (k === 'c' || k === 'C') { e.preventDefault(); openCatManager(); }
     else if (k === '0') { state.filter.clear(); render(); toast('すべて表示'); }
     else if (/^[1-9]$/.test(k)) toggleCat(+k);

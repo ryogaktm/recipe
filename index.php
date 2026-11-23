@@ -1,47 +1,118 @@
 <?php
 require __DIR__ . '/config.php';
-session_start();
+ensure_dirs();
 
-$loginError = '';
+// ログイン後に戻る先（共有ページからのログインなど）
+function safe_return($r) {
+    return (is_string($r) && preg_match('/^share\.php\?s=u[a-f0-9]{12}\.[a-f0-9]{32}$/', $r)) ? $r : './';
+}
+$return = safe_return($_GET['return'] ?? $_POST['return'] ?? '');
+
 if (isset($_GET['logout'])) {
-    $_SESSION = [];
-    session_destroy();
+    logout_user();
     header('Location: ./');
     exit;
 }
-if (APP_PASSWORD !== '' && $_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['password'])) {
-    if (check_password((string)$_POST['password'])) {
-        session_regenerate_id(true);
-        $_SESSION['recipe_auth'] = true;
-        header('Location: ./');
-        exit;
+
+$me = current_user();
+$mode = ($_GET['mode'] ?? $_POST['mode'] ?? 'login') === 'register' ? 'register' : 'login';
+$error = '';
+$nameValue = '';
+$settings = app_settings();
+
+if (!$me && $_SERVER['REQUEST_METHOD'] === 'POST') {
+    $nameValue = trim((string)($_POST['name'] ?? ''));
+    $pw = (string)($_POST['password'] ?? '');
+    if (!hash_equals(csrf_token(), (string)($_POST['csrf'] ?? ''))) {
+        $error = '画面が古くなっていました。もう一度お試しください';
+    } elseif ($mode === 'login') {
+        $u = find_user(load_json('users'), 'name', $nameValue);
+        if ($u && password_verify($pw, $u['hash'])) {
+            login_user($u);
+            header('Location: ' . $return);
+            exit;
+        }
+        $error = 'ユーザー名かパスワードが違います';
+    } else {
+        $lock = with_lock();
+        $users = load_json('users');
+        $first = count($users) === 0;
+        if (!$first && !$settings['signup_open']) {
+            $error = '現在、新規登録は受け付けていません';
+        } elseif (!$first && $settings['invite_code'] !== '' && !hash_equals($settings['invite_code'], trim((string)($_POST['invite'] ?? '')))) {
+            $error = '招待コードが違います';
+        } elseif (!preg_match('/^[A-Za-z0-9_\-]{3,20}$/', $nameValue)) {
+            $error = 'ユーザー名は半角英数字（_ - も可）3〜20文字にしてください';
+        } elseif (strlen($pw) < 6) {
+            $error = 'パスワードは6文字以上にしてください';
+        } elseif (find_user($users, 'name', $nameValue)) {
+            $error = 'そのユーザー名はもう使われています';
+        } else {
+            $u = ['id' => 'u' . bin2hex(random_bytes(6)), 'name' => $nameValue, 'hash' => password_hash($pw, PASSWORD_DEFAULT),
+                  'admin' => $first, 'created' => date('c'), 'tokens' => []];
+            $users[] = $u;
+            save_json('users', $users);
+            if ($first) migrate_legacy_data($u['id']);
+            fclose($lock);
+            login_user($u);
+            header('Location: ' . $return);
+            exit;
+        }
+        fclose($lock);
     }
-    $loginError = 'パスワードが違います';
 }
-$authed = auth_ok();
 $token = csrf_token();
+$noUsers = count(load_json('users')) === 0;
+if ($noUsers) $mode = 'register';
+$h = function ($s) { return htmlspecialchars((string)$s, ENT_QUOTES); };
 ?>
 <!DOCTYPE html>
 <html lang="ja">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="csrf-token" content="<?= htmlspecialchars($token) ?>">
+<meta name="csrf-token" content="<?= $h($token) ?>">
 <meta name="theme-color" content="#2f9a5b">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="RECIPES">
 <title>RECIPES</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" href="icons/favicon-64.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@500;700;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=3">
+<link rel="stylesheet" href="style.css?v=4">
 </head>
 <body>
-<?php if (!$authed): ?>
+<?php if (!$me): ?>
   <main class="login">
-    <form method="post" class="login-card">
+    <form method="post" class="login-card" autocomplete="on">
+      <img class="login-icon" src="icons/icon-192.png" alt="" width="96" height="96">
       <h1 class="logo">RECIPES</h1>
-      <input type="password" name="password" placeholder="パスワード" autofocus required>
-      <?php if ($loginError): ?><p class="err"><?= htmlspecialchars($loginError) ?></p><?php endif; ?>
-      <button class="btn primary">ひらく</button>
+      <?php if ($noUsers): ?>
+        <p class="login-note">はじめに管理者アカウントを作ります</p>
+      <?php else: ?>
+        <div class="auth-tabs">
+          <a href="?mode=login<?= $return !== './' ? '&return=' . urlencode($return) : '' ?>" class="<?= $mode === 'login' ? 'on' : '' ?>">ログイン</a>
+          <?php if ($settings['signup_open']): ?>
+            <a href="?mode=register<?= $return !== './' ? '&return=' . urlencode($return) : '' ?>" class="<?= $mode === 'register' ? 'on' : '' ?>">新規登録</a>
+          <?php endif; ?>
+        </div>
+      <?php endif; ?>
+      <input type="hidden" name="csrf" value="<?= $h($token) ?>">
+      <input type="hidden" name="mode" value="<?= $h($mode) ?>">
+      <input type="hidden" name="return" value="<?= $h($return) ?>">
+      <input type="text" name="name" placeholder="ユーザー名" value="<?= $h($nameValue) ?>" autocapitalize="off" autocorrect="off" spellcheck="false" autocomplete="username" required>
+      <input type="password" name="password" placeholder="パスワード<?= $mode === 'register' ? '（6文字以上）' : '' ?>" autocomplete="<?= $mode === 'register' ? 'new-password' : 'current-password' ?>" required>
+      <?php if ($mode === 'register' && !$noUsers && $settings['invite_code'] !== ''): ?>
+        <input type="text" name="invite" placeholder="招待コード" autocapitalize="off" required>
+      <?php endif; ?>
+      <?php if ($error): ?><p class="err"><?= $h($error) ?></p><?php endif; ?>
+      <button class="btn primary"><?= $mode === 'register' ? '登録してはじめる' : 'ログイン' ?></button>
+      <?php if ($mode === 'register'): ?><p class="login-note small">ユーザー名は半角英数字3〜20文字。共有のときに相手に伝える名前になります。</p><?php endif; ?>
     </form>
   </main>
 <?php else: ?>
@@ -52,7 +123,9 @@ $token = csrf_token();
         <input id="q" type="search" placeholder="タイトルで検索" autocomplete="off" enterkeyhint="search">
       </div>
       <button class="help-btn" id="helpBtn" title="ショートカット一覧 (?)" aria-label="ショートカット一覧">?</button>
-      <?php if (APP_PASSWORD !== ''): ?><a class="logout" href="?logout=1" title="ログアウト">⎋</a><?php endif; ?>
+      <button class="avatar" id="accountBtn" aria-label="アカウント" title="アカウント">
+        <?= $h(mb_strtoupper(mb_substr($me['name'], 0, 1))) ?><span class="dot" id="inboxDot" hidden></span>
+      </button>
     </div>
     <nav class="chips-bar" id="filterBar"></nav>
   </header>
@@ -79,13 +152,21 @@ $token = csrf_token();
           <span class="pos" id="viewPos"></span>
           <button class="icon-btn" id="nextBtn" aria-label="次のレシピ" title="次のレシピ (→)">›</button>
         </div>
-        <button class="btn small" id="editBtn" title="編集 (E)">編集</button>
+        <div class="own-only head-actions">
+          <button class="icon-btn share-ic" id="shareBtn" aria-label="共有" title="共有 (S)"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12M7 8l5-5 5 5M5 13v6a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-6"/></svg></button>
+          <button class="btn small" id="editBtn" title="編集 (E)">編集</button>
+        </div>
       </div>
       <div class="view-body">
+        <p class="from-line inbox-only" id="viewFrom"></p>
         <h2 id="viewTitle"></h2>
         <div class="chips" id="viewCats"></div>
         <div class="view-images" id="viewImages"></div>
-        <button class="btn danger-text" id="deleteBtn">このレシピを削除</button>
+        <div class="inbox-only inbox-actions">
+          <button class="btn primary block" id="importBtn">自分のレシピに保存</button>
+          <button class="btn danger-text" id="dismissBtn">共有された一覧から外す</button>
+        </div>
+        <button class="btn danger-text own-only" id="deleteBtn">このレシピを削除</button>
       </div>
     </div>
   </div>
@@ -165,12 +246,14 @@ $token = csrf_token();
           <dt><kbd>1</kbd>〜<kbd>9</kbd></dt><dd>カテゴリで絞り込み（もう一度で解除）</dd>
           <dt><kbd>0</kbd></dt><dd>絞り込みをすべて解除</dd>
           <dt><kbd>C</kbd></dt><dd>カテゴリの管理</dd>
+          <dt><kbd>I</kbd></dt><dd>自分のレシピ ⇄ 共有された を切り替え</dd>
           <dt><kbd>Enter</kbd></dt><dd>先頭のレシピを開く（検索中も）</dd>
         </dl>
         <h4>レシピを見ているとき</h4>
         <dl class="keys">
           <dt><kbd>←</kbd> <kbd>→</kbd></dt><dd>前・次のレシピ</dd>
           <dt><kbd>E</kbd></dt><dd>編集</dd>
+          <dt><kbd>S</kbd></dt><dd>共有</dd>
           <dt><kbd>Delete</kbd></dt><dd>削除</dd>
         </dl>
         <h4>追加・編集中</h4>
@@ -183,11 +266,83 @@ $token = csrf_token();
     </div>
   </div>
 
+  <!-- 共有 -->
+  <div class="modal" id="shareModal" hidden>
+    <div class="sheet small-sheet">
+      <div class="sheet-head">
+        <button class="icon-btn" data-close aria-label="閉じる">✕</button>
+        <h3>共有</h3>
+        <span class="head-gap"></span>
+      </div>
+      <div class="edit-body">
+        <p class="share-title" id="shareTitle"></p>
+        <h4 class="sec">リンクで共有</h4>
+        <p class="hint">リンクを知っている人は、ログインなしで見られます。LINEやメールで送るときに。</p>
+        <div id="linkNone"><button class="btn primary" id="linkCreate">共有リンクを作る</button></div>
+        <div id="linkSome" hidden>
+          <div class="link-row"><input class="input" id="linkUrl" readonly><button class="btn small" id="linkCopy">コピー</button></div>
+          <div class="link-actions">
+            <button class="btn small primary" id="linkSend" hidden>送る…</button>
+            <button class="btn small ghost-red" id="linkStop">リンクを止める</button>
+          </div>
+        </div>
+        <h4 class="sec">ユーザーに送る</h4>
+        <p class="hint">相手の「共有された」に届き、自分のレシピに保存できます。</p>
+        <form class="new-cat" id="sendForm">
+          <input class="input" id="sendName" placeholder="相手のユーザー名" autocapitalize="off" autocorrect="off" spellcheck="false">
+          <button class="btn small primary">送る</button>
+        </form>
+        <ul class="share-users" id="shareUsers"></ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- アカウント -->
+  <div class="modal" id="accountModal" hidden>
+    <div class="sheet small-sheet">
+      <div class="sheet-head">
+        <button class="icon-btn" data-close aria-label="閉じる">✕</button>
+        <h3>アカウント</h3>
+        <span class="head-gap"></span>
+      </div>
+      <div class="edit-body">
+        <div class="me-row"><span class="avatar big" id="meAvatar"></span><div><b id="meName"></b><p class="hint" id="meRole"></p></div></div>
+        <button class="menu-item" id="goInbox">共有されたレシピ<span class="badge-n" id="inboxCount"></span></button>
+        <button class="menu-item" id="goCats">カテゴリの管理</button>
+        <button class="menu-item pc-only-flex" id="goHelp">ショートカット一覧</button>
+        <details class="menu-details">
+          <summary class="menu-item">パスワードを変える</summary>
+          <form id="pwForm" class="stack-form">
+            <input class="input" type="password" id="pwCur" placeholder="今のパスワード" autocomplete="current-password" required>
+            <input class="input" type="password" id="pwNew" placeholder="新しいパスワード（6文字以上）" autocomplete="new-password" required>
+            <button class="btn primary">変更する</button>
+          </form>
+        </details>
+        <details class="menu-details" id="adminBox" hidden>
+          <summary class="menu-item">管理設定</summary>
+          <form id="adminForm" class="stack-form">
+            <label class="check"><input type="checkbox" id="setSignup"> 新規登録を受け付ける</label>
+            <label class="field-label">招待コード <span class="hint">（空なら誰でも登録できます）</span></label>
+            <input class="input" id="setInvite" maxlength="40" placeholder="例：family2026">
+            <p class="hint" id="userCount"></p>
+            <button class="btn primary">保存</button>
+          </form>
+        </details>
+        <div class="install-hint" id="installHint">
+          <b>アプリのように使う</b>
+          <p class="hint" id="installText">iPhone：共有ボタン →「ホーム画面に追加」／ Android・PC：ブラウザのメニュー →「アプリをインストール」</p>
+          <button class="btn small primary" id="installBtn" hidden>ホーム画面に追加</button>
+        </div>
+        <a class="menu-item logout-item" href="?logout=1">ログアウト</a>
+      </div>
+    </div>
+  </div>
+
   <!-- 画像拡大 -->
   <div class="lightbox" id="lightbox" hidden><img alt=""></div>
 
   <div class="toast" id="toast" hidden></div>
-  <script src="app.js?v=3"></script>
+  <script src="app.js?v=4"></script>
 <?php endif; ?>
 </body>
 </html>
