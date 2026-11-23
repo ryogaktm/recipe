@@ -40,6 +40,8 @@
   // 画像の役割：1枚目=材料、2枚目=作り方、3枚目=表紙、4枚目以降=イメージ
   const ROLES = ['材料', '作り方', '表紙'];
   const roleOf = i => ROLES[i] || 'イメージ';
+  // 1・2枚目（文字ページ）は補正済みがあればそれを表示する
+  const shownName = (r, i) => { const n = r.images[i]; return (n && i < 2 && r.fix && r.fix[n]) || n; };
   const coverOf = imgs => imgs[2] || imgs.find(Boolean);
   const isPC = matchMedia('(hover: hover) and (pointer: fine)').matches;
   const catName = (id) => (state.categories.find(c => c.id === id) || {}).name;
@@ -97,7 +99,7 @@
   function items() {
     if (state.mode === 'inbox') {
       return state.inbox.map(x => ({
-        id: x.share_id, title: x.recipe.title, memo: x.recipe.memo || '', level: x.recipe.level || 0, rating: x.recipe.rating || 0, images: x.recipe.images, owner: x.from.id,
+        id: x.share_id, title: x.recipe.title, memo: x.recipe.memo || '', level: x.recipe.level || 0, rating: x.recipe.rating || 0, images: x.recipe.images, fix: x.recipe.fix || {}, owner: x.from.id,
         catNames: x.recipe.category_names, from: x.from, recipeId: x.recipe.id, categories: [],
       }));
     }
@@ -165,7 +167,7 @@
   function card(r) {
     return el('button', { class: 'card', onclick: () => openView(r.id) },
       el('div', { class: 'thumb' },
-        el('img', { src: thumbUrl(coverOf(r.images), r.owner), loading: 'lazy', decoding: 'async', alt: '' }),
+        el('img', { src: thumbUrl(shownName(r, r.images[2] ? 2 : r.images.findIndex(Boolean)), r.owner), loading: 'lazy', decoding: 'async', alt: '' }),
         r.images.filter(Boolean).length > 1 ? el('span', { class: 'badge' }, `${r.images.filter(Boolean).length}枚`) : null
       ),
       el('div', { class: 'meta' },
@@ -213,7 +215,7 @@
     $('#viewImages').replaceChildren(...r.images.flatMap((n, i) => !n ? [] :
       el('figure', { class: 'img-block' },
         el('figcaption', { class: 'img-role r' + Math.min(i, 3) }, roleOf(i)),
-        el('img', { src: imgUrl(n, r.owner), alt: roleOf(i), loading: i > 1 ? 'lazy' : 'eager', decoding: 'async', onclick: () => openLightbox(imgUrl(n, r.owner)) }))
+        el('img', { src: imgUrl(shownName(r, i), r.owner), alt: roleOf(i), loading: i > 1 ? 'lazy' : 'eager', decoding: 'async', onclick: () => openLightbox(imgUrl(shownName(r, i), r.owner)) }))
     ));
     $('#viewModal .view-body').scrollTop = 0;
     openModal('#viewModal');
@@ -494,19 +496,32 @@
     fd.append('level', ed.level || 0);
     fd.append('rating', ed.rating || 0);
     ed.cats.forEach(c => fd.append('categories[]', c));
+    const btn = $('#saveBtn');
+    btn.disabled = true; btn.textContent = '補正して保存中…';
+    try {
+    const cur = ed.id ? state.recipes.find(x => x.id === ed.id) : null;
     let n = 0;
     for (const [i, it] of ed.items.entries()) {
       if (!it) { if (i < 3) fd.append('order[]', 'e:'); continue; }
-      if (it.kind === 'old') { fd.append('keep[]', it.name); fd.append('order[]', 'k:' + it.name); }
-      else {
+      const textPage = i < 2;
+      if (it.kind === 'old') {
+        fd.append('keep[]', it.name); fd.append('order[]', 'k:' + it.name);
+        // 文字ページで、まだ補正済みが無ければ作る
+        if (textPage && !(cur && cur.fix && cur.fix[it.name])) {
+          try { fd.append('fixfile[]', await makeTextFix(imgUrl(it.name)), 'fix.jpg'); fd.append('fixfor[]', 'k:' + it.name); } catch {}
+        }
+      } else {
         const ext = ({ 'image/png': 'png', 'image/webp': 'webp', 'image/gif': 'gif' })[it.blob.type] || 'jpg';
         fd.append('images[]', it.blob, `img${n}.${ext}`);
-        fd.append('order[]', 'n:' + n++);
+        fd.append('order[]', 'n:' + n);
+        if (it.manual) fd.append('fixsame[]', 'n:' + n);   // 手動で補正済みなら二重にかけない
+        else if (textPage) {
+          try { fd.append('fixfile[]', await makeTextFix(it.blob), 'fix.jpg'); fd.append('fixfor[]', 'n:' + n); } catch {}
+        }
+        n++;
       }
     }
-    const btn = $('#saveBtn');
-    btn.disabled = true; btn.textContent = '保存中…';
-    try {
+    btn.textContent = '保存中…';
       const { recipe } = await api('save_recipe', fd);
       state.mode = 'mine';
       cleanupEdit();
@@ -604,7 +619,7 @@
     crop.base = c;
     crop.w = c.width; crop.h = c.height;
     crop.box = { x: 0, y: 0, w: crop.w, h: crop.h };
-    estimateBg();
+    Object.assign(crop, estimateBg(crop.base));
     refreshPreview();
   }
 
@@ -619,8 +634,8 @@
   function updateAdjLabels() {
     ['shadow', 'bright', 'contrast'].forEach(k => { const e = $('#adjv_' + k); if (e) e.textContent = crop.adj[k]; });
   }
-  function estimateBg() {
-    const c = crop.base, GW = Math.max(8, Math.round(c.width / 12)), GH = Math.max(8, Math.round(c.height / 12));
+  function estimateBg(c) {
+    const GW = Math.max(8, Math.round(c.width / 12)), GH = Math.max(8, Math.round(c.height / 12));
     const s = document.createElement('canvas'); s.width = GW; s.height = GH;
     const sx = s.getContext('2d'); sx.imageSmoothingQuality = 'high'; sx.drawImage(c, 0, 0, GW, GH);
     const d = sx.getImageData(0, 0, GW, GH).data;
@@ -653,10 +668,11 @@
     const bx = bc.getContext('2d'), id = bx.createImageData(GW, GH);
     for (let i = 0; i < L.length; i++) { const v = Math.round(L[i]); id.data[i * 4] = id.data[i * 4 + 1] = id.data[i * 4 + 2] = v; id.data[i * 4 + 3] = 255; }
     bx.putImageData(id, 0, 0);
-    crop.bg = bc; crop.bgMax = Math.max(60, mx);
+    return { bg: bc, bgMax: Math.max(60, mx) };
   }
   // src を補正して新しいキャンバスで返す
-  function adjustCanvas(src, adj) {
+  function adjustCanvas(src, adj, bgi) {
+    bgi = bgi || crop;
     const out = document.createElement('canvas');
     out.width = src.width; out.height = src.height;
     const x = out.getContext('2d');
@@ -668,10 +684,10 @@
     if (adj.shadow) {
       const t = document.createElement('canvas'); t.width = W; t.height = H;
       const tx = t.getContext('2d'); tx.imageSmoothingEnabled = true; tx.imageSmoothingQuality = 'high';
-      tx.drawImage(crop.bg, 0, 0, W, H);
+      tx.drawImage(bgi.bg, 0, 0, W, H);
       bgd = tx.getImageData(0, 0, W, H).data;
     }
-    const s = adj.shadow / 100, target = crop.bgMax;
+    const s = adj.shadow / 100, target = bgi.bgMax;
     const kc = 1 + adj.contrast / 100, off = adj.bright * 1.28;
     for (let i = 0; i < d.length; i += 4) {
       let g = 1;
@@ -790,13 +806,32 @@
       if (!blob || !state.edit) return;
       const items = state.edit.items, old = items[crop.idx];
       if (old && old.kind === 'new') URL.revokeObjectURL(old.url);
-      items[crop.idx] = { kind: 'new', blob, url: URL.createObjectURL(blob) };
+      items[crop.idx] = { kind: 'new', blob, url: URL.createObjectURL(blob), manual: !!(crop.adj.shadow || crop.adj.bright || crop.adj.contrast) };
       renderThumbs();
       closeModal('#cropModal');
       toast('トリミングしました（保存で反映）');
     }, type, type === 'image/webp' ? 0.9 : 0.92);
   });
   window.addEventListener('resize', () => { if (!$('#cropModal').hidden) layoutCrop(); });
+
+  // ---------- 文字ページ（材料・作り方）の自動補正 ----------
+  // 1枚目・2枚目は文字なので、保存するときに補正済みの画像も一緒に作って送る。
+  // 元の画像はそのまま残るので、3枚目（表紙）などに移すと元の見た目に戻る。
+  const TEXT_FIX = { shadow: 80, bright: 0, contrast: 12 };
+  async function makeTextFix(blobOrUrl) {
+    const url = typeof blobOrUrl === 'string' ? blobOrUrl : URL.createObjectURL(blobOrUrl);
+    try {
+      const img = await loadImage(url);
+      const sw = img.naturalWidth, sh = img.naturalHeight, k = Math.min(1, 1600 / Math.max(sw, sh));
+      const c = document.createElement('canvas');
+      c.width = Math.max(1, Math.round(sw * k)); c.height = Math.max(1, Math.round(sh * k));
+      const x = c.getContext('2d'); x.fillStyle = '#fff'; x.fillRect(0, 0, c.width, c.height);
+      x.imageSmoothingQuality = 'high'; x.drawImage(img, 0, 0, c.width, c.height);
+      const out = adjustCanvas(c, TEXT_FIX, estimateBg(c));
+      const type = canWebp && state.webpOk ? 'image/webp' : 'image/jpeg';
+      return await new Promise(res => out.toBlob(res, type, type === 'image/webp' ? 0.9 : 0.92));
+    } finally { if (typeof blobOrUrl !== 'string') URL.revokeObjectURL(url); }
+  }
 
   // ---------- 共有されたレシピ：保存・外す ----------
   $('#importBtn').addEventListener('click', async () => {

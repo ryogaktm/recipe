@@ -186,18 +186,21 @@ function migrate_legacy_data($uid) {
 }
 
 // 画像を見てよいか：自分の画像 / 共有リンク / 自分宛てに共有されたレシピの画像
+function recipe_files($r) {
+    return array_merge($r['images'], array_values($r['fix'] ?? []));
+}
 function can_view_image($viewer, $owner, $file, $token) {
     if ($viewer && $viewer['id'] === $owner) return true;
     $recipes = load_user($owner, 'recipes');
     if ($token !== '') {
         foreach ($recipes as $r) {
-            if (!empty($r['share_token']) && hash_equals($r['share_token'], $token) && in_array($file, $r['images'], true)) return true;
+            if (!empty($r['share_token']) && hash_equals($r['share_token'], $token) && in_array($file, recipe_files($r), true)) return true;
         }
     }
     if ($viewer) {
         $ids = [];
         foreach (load_json('shares') as $s) if ($s['from'] === $owner && $s['to'] === $viewer['id']) $ids[] = $s['recipe'];
-        foreach ($recipes as $r) if (in_array($r['id'], $ids, true) && in_array($file, $r['images'], true)) return true;
+        foreach ($recipes as $r) if (in_array($r['id'], $ids, true) && in_array($file, recipe_files($r), true)) return true;
     }
     return false;
 }

@@ -79,9 +79,20 @@ function copy_recipe_to($uid, $ownerId, $src, &$recipes, &$categories) {
     }
     while ($images && end($images) === '') array_pop($images);
     if (!array_filter($images)) fail('画像をコピーできませんでした');
+    // 補正済み画像（文字用）も一緒にコピー
+    $fix = [];
+    foreach (($src['fix'] ?? []) as $orig => $ff) {
+        $k = array_search($orig, $src['images'], true);
+        if ($k === false || !isset($images[$k]) || $images[$k] === '') continue;
+        if ($ff === $orig) { $fix[$images[$k]] = $images[$k]; continue; }
+        $from = UPLOAD_DIR . "/$ownerId/" . basename($ff);
+        if (!is_file($from)) continue;
+        $name = bin2hex(random_bytes(12)) . '.' . pathinfo($ff, PATHINFO_EXTENSION);
+        if (copy($from, "$dir/$name")) $fix[$images[$k]] = $name;
+    }
     $now = date('c');
     $rec = ['id' => new_id('r'), 'title' => $src['title'], 'memo' => $src['memo'] ?? '', 'level' => (int)($src['level'] ?? 0), 'rating' => (int)($src['rating'] ?? 0), 'categories' => array_values(array_unique($myCats)),
-            'images' => $images, 'created' => $now, 'updated' => $now, 'from' => $ownerId];
+            'images' => $images, 'fix' => $fix, 'created' => $now, 'updated' => $now, 'from' => $ownerId];
     array_unshift($recipes, $rec);
     return $rec;
 }
@@ -104,7 +115,7 @@ case 'list':
         foreach ($r['categories'] as $cid) foreach ($cache[$s['from']]['c'] as $c) if ($c['id'] === $cid) $cn[] = $c['name'];
         $inbox[] = ['share_id' => $s['id'], 'from' => ['id' => $s['from'], 'name' => user_name($s['from'])],
                     'created' => $s['created'], 'seen' => !empty($s['seen']),
-                    'recipe' => ['id' => $r['id'], 'title' => $r['title'], 'memo' => $r['memo'] ?? '', 'level' => (int)($r['level'] ?? 0), 'rating' => (int)($r['rating'] ?? 0), 'images' => $r['images'], 'category_names' => $cn]];
+                    'recipe' => ['id' => $r['id'], 'title' => $r['title'], 'memo' => $r['memo'] ?? '', 'level' => (int)($r['level'] ?? 0), 'rating' => (int)($r['rating'] ?? 0), 'images' => $r['images'], 'fix' => $r['fix'] ?? [], 'category_names' => $cn]];
     }
     $res = ['me' => ['id' => $uid, 'name' => $me['name'], 'admin' => !empty($me['admin'])],
             'recipes' => array_map('strip_private', $recipes), 'categories' => $categories, 'inbox' => $inbox,
@@ -154,6 +165,37 @@ case 'save_recipe':
             $added[] = $name;
         }
     }
+    // 文字用の補正済み画像: fixfor[] = "k:ファイル名" / "n:番号" と fixfile[] が対応。fixsame[] は「補正なし（元のまま）」
+    $fixmap = $idx >= 0 ? (array)($recipes[$idx]['fix'] ?? []) : [];
+    $fixAdded = [];
+    $keyToOrig = function ($key) use ($keep, $added) {
+        if (str_starts_with($key, 'k:') && in_array(substr($key, 2), $keep, true)) return substr($key, 2);
+        if (str_starts_with($key, 'n:') && isset($added[(int)substr($key, 2)])) return $added[(int)substr($key, 2)];
+        return null;
+    };
+    $ff = $_FILES['fixfile'] ?? null;
+    $fixfor = (array)($_POST['fixfor'] ?? []);
+    if ($ff && is_array($ff['name'])) {
+        $dir = user_upload_dir($uid);
+        foreach ($ff['name'] as $i => $_) {
+            if ($ff['error'][$i] !== UPLOAD_ERR_OK || $ff['size'][$i] > MAX_UPLOAD_BYTES) continue;
+            $orig = isset($fixfor[$i]) ? $keyToOrig($fixfor[$i]) : null;
+            if ($orig === null) continue;
+            $mime = detect_image_mime($ff['tmp_name'][$i]);
+            if (!isset($mimeExt[$mime])) continue;
+            $name = bin2hex(random_bytes(12)) . '.' . $mimeExt[$mime];
+            if (!move_uploaded_file($ff['tmp_name'][$i], "$dir/$name")) continue;
+            $fixAdded[] = $name;
+            if (isset($fixmap[$orig]) && $fixmap[$orig] !== $orig) delete_images($uid, [$fixmap[$orig]]);
+            $fixmap[$orig] = $name;
+        }
+    }
+    foreach ((array)($_POST['fixsame'] ?? []) as $key) {
+        $orig = $keyToOrig($key);
+        if ($orig === null) continue;
+        if (isset($fixmap[$orig]) && $fixmap[$orig] !== $orig) delete_images($uid, [$fixmap[$orig]]);
+        $fixmap[$orig] = $orig;
+    }
     // 並び順: order[] = "k:ファイル名"（既存）/ "n:番号"（今回追加分）
     // 先頭3枠（材料・作り方・表紙）は "e:" で空きにできる
     $images = [];
@@ -168,12 +210,18 @@ case 'save_recipe':
     while ($images && end($images) === '') array_pop($images);
     if (!array_filter($images)) fail('画像を1枚以上添付してください');
 
+    // 画像が無くなったものの補正画像は消す
+    $dropFix = [];
+    foreach ($fixmap as $orig => $ffn) {
+        if (!in_array($orig, $images, true)) { if ($ffn !== $orig) $dropFix[] = $ffn; unset($fixmap[$orig]); }
+    }
+    delete_images($uid, $dropFix);
     $now = date('c');
     if ($idx >= 0) {
-        $recipes[$idx] = array_merge($recipes[$idx], ['title' => $title, 'memo' => $memo, 'level' => $level, 'rating' => $rating, 'categories' => $cats, 'images' => $images, 'updated' => $now]);
+        $recipes[$idx] = array_merge($recipes[$idx], ['fix' => $fixmap, 'title' => $title, 'memo' => $memo, 'level' => $level, 'rating' => $rating, 'categories' => $cats, 'images' => $images, 'updated' => $now]);
         $saved = $recipes[$idx];
     } else {
-        $saved = ['id' => new_id('r'), 'title' => $title, 'memo' => $memo, 'level' => $level, 'rating' => $rating, 'categories' => $cats, 'images' => $images, 'created' => $now, 'updated' => $now];
+        $saved = ['id' => new_id('r'), 'title' => $title, 'memo' => $memo, 'level' => $level, 'rating' => $rating, 'categories' => $cats, 'images' => $images, 'fix' => $fixmap, 'created' => $now, 'updated' => $now];
         array_unshift($recipes, $saved);
     }
     save_user($uid, 'recipes', $recipes);
@@ -184,7 +232,7 @@ case 'delete_recipe':
     $rid = (string)($_POST['id'] ?? '');
     $idx = find_index($recipes, $rid);
     if ($idx < 0) fail('レシピが見つかりません', 404);
-    $imgs = $recipes[$idx]['images'];
+    $imgs = recipe_files($recipes[$idx]);
     array_splice($recipes, $idx, 1);
     save_user($uid, 'recipes', $recipes);
     delete_images($uid, $imgs);
