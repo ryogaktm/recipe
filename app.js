@@ -569,9 +569,13 @@
   // ---------- トリミング ----------
   // 画像の座標（元の画素）で切り抜き範囲を持ち、表示用に縮小して重ねる。
   // 縦に長いスクショは横幅いっぱいに表示して、画面をスクロールしながら範囲を決められる。
-  const crop = { idx: -1, src: null, w: 0, h: 0, box: null, scale: 1 };
+  const crop = { idx: -1, src: null, base: null, w: 0, h: 0, box: null, scale: 1, bg: null, bgMax: 255, adj: { shadow: 0, bright: 0, contrast: 0 } };
   function loadImage(url) {
-    return new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = url; });
+    return new Promise((res, rej) => {
+      const i = new Image();
+      i.onload = async () => { try { if (i.decode) await i.decode(); } catch {} res(i); };
+      i.onerror = rej; i.src = url;
+    });
   }
   async function openCrop(idx) {
     const it = state.edit && state.edit.items[idx];
@@ -581,17 +585,130 @@
     catch { return toast('画像を読み込めませんでした'); }
     crop.idx = idx;
     $('#cropTitle').textContent = 'トリミング（' + (idx < 3 ? ROLES[idx] : 'イメージ') + '）';
+    resetAdj();
     setCropSource(img);
     openModal('#cropModal');
     requestAnimationFrame(layoutCrop);
   }
+  // 作業用キャンバス（長辺2000pxまで）に取り込む。画像要素をそのまま表示しないので、
+  // 大きい写真でも途中までしか描画されない問題が起きない。
   function setCropSource(src) {
-    crop.src = src;
-    crop.w = src.naturalWidth || src.width;
-    crop.h = src.naturalHeight || src.height;
+    const sw = src.naturalWidth || src.width, sh = src.naturalHeight || src.height;
+    const k = Math.min(1, 2000 / Math.max(sw, sh));
+    const c = document.createElement('canvas');
+    c.width = Math.max(1, Math.round(sw * k)); c.height = Math.max(1, Math.round(sh * k));
+    const x = c.getContext('2d');
+    x.fillStyle = '#fff'; x.fillRect(0, 0, c.width, c.height);
+    x.imageSmoothingQuality = 'high';
+    x.drawImage(src, 0, 0, c.width, c.height);
+    crop.base = c;
+    crop.w = c.width; crop.h = c.height;
     crop.box = { x: 0, y: 0, w: crop.w, h: crop.h };
-    $('#cropImg').src = src instanceof HTMLCanvasElement ? src.toDataURL('image/jpeg', 0.92) : src.src;
+    estimateBg();
+    refreshPreview();
   }
+
+  // ---------- 影・明るさの補正 ----------
+  // 紙面の明るさのムラ（影）を、文字を無視した「背景の明るさ」として推定し、
+  // それが均一になるように持ち上げる。強さはスライダーで調整。
+  function resetAdj() {
+    crop.adj = { shadow: 0, bright: 0, contrast: 0 };
+    ['shadow', 'bright', 'contrast'].forEach(k => { const e = $('#adj_' + k); if (e) e.value = 0; });
+    updateAdjLabels();
+  }
+  function updateAdjLabels() {
+    ['shadow', 'bright', 'contrast'].forEach(k => { const e = $('#adjv_' + k); if (e) e.textContent = crop.adj[k]; });
+  }
+  function estimateBg() {
+    const c = crop.base, GW = Math.max(8, Math.round(c.width / 12)), GH = Math.max(8, Math.round(c.height / 12));
+    const s = document.createElement('canvas'); s.width = GW; s.height = GH;
+    const sx = s.getContext('2d'); sx.imageSmoothingQuality = 'high'; sx.drawImage(c, 0, 0, GW, GH);
+    const d = sx.getImageData(0, 0, GW, GH).data;
+    let L = new Float32Array(GW * GH);
+    for (let i = 0; i < L.length; i++) L[i] = 0.299 * d[i * 4] + 0.587 * d[i * 4 + 1] + 0.114 * d[i * 4 + 2];
+    // 最大値フィルタ（文字などの暗い部分を消す）→ ぼかし
+    const maxf = (src, r) => {
+      const tmp = new Float32Array(src.length), out = new Float32Array(src.length);
+      for (let y = 0; y < GH; y++) for (let x = 0; x < GW; x++) {
+        let m = 0; for (let k = Math.max(0, x - r); k <= Math.min(GW - 1, x + r); k++) m = Math.max(m, src[y * GW + k]); tmp[y * GW + x] = m;
+      }
+      for (let y = 0; y < GH; y++) for (let x = 0; x < GW; x++) {
+        let m = 0; for (let k = Math.max(0, y - r); k <= Math.min(GH - 1, y + r); k++) m = Math.max(m, tmp[k * GW + x]); out[y * GW + x] = m;
+      }
+      return out;
+    };
+    const blur = (src, r) => {
+      const tmp = new Float32Array(src.length), out = new Float32Array(src.length);
+      for (let y = 0; y < GH; y++) for (let x = 0; x < GW; x++) {
+        let t = 0, n = 0; for (let k = Math.max(0, x - r); k <= Math.min(GW - 1, x + r); k++) { t += src[y * GW + k]; n++; } tmp[y * GW + x] = t / n;
+      }
+      for (let y = 0; y < GH; y++) for (let x = 0; x < GW; x++) {
+        let t = 0, n = 0; for (let k = Math.max(0, y - r); k <= Math.min(GH - 1, y + r); k++) { t += tmp[k * GW + x]; n++; } out[y * GW + x] = t / n;
+      }
+      return out;
+    };
+    L = blur(maxf(L, 4), 3);
+    let mx = 0; for (let i = 0; i < L.length; i++) mx = Math.max(mx, L[i]);
+    const bc = document.createElement('canvas'); bc.width = GW; bc.height = GH;
+    const bx = bc.getContext('2d'), id = bx.createImageData(GW, GH);
+    for (let i = 0; i < L.length; i++) { const v = Math.round(L[i]); id.data[i * 4] = id.data[i * 4 + 1] = id.data[i * 4 + 2] = v; id.data[i * 4 + 3] = 255; }
+    bx.putImageData(id, 0, 0);
+    crop.bg = bc; crop.bgMax = Math.max(60, mx);
+  }
+  // src を補正して新しいキャンバスで返す
+  function adjustCanvas(src, adj) {
+    const out = document.createElement('canvas');
+    out.width = src.width; out.height = src.height;
+    const x = out.getContext('2d');
+    x.drawImage(src, 0, 0);
+    if (!adj.shadow && !adj.bright && !adj.contrast) return out;
+    const W = out.width, H = out.height;
+    const img = x.getImageData(0, 0, W, H), d = img.data;
+    let bgd = null;
+    if (adj.shadow) {
+      const t = document.createElement('canvas'); t.width = W; t.height = H;
+      const tx = t.getContext('2d'); tx.imageSmoothingEnabled = true; tx.imageSmoothingQuality = 'high';
+      tx.drawImage(crop.bg, 0, 0, W, H);
+      bgd = tx.getImageData(0, 0, W, H).data;
+    }
+    const s = adj.shadow / 100, target = crop.bgMax;
+    const kc = 1 + adj.contrast / 100, off = adj.bright * 1.28;
+    for (let i = 0; i < d.length; i += 4) {
+      let g = 1;
+      if (bgd) { const b = Math.max(50, bgd[i]); g = 1 + (Math.min(3, target / b) - 1) * s; }
+      for (let c = 0; c < 3; c++) {
+        let v = d[i + c] * g;
+        v = (v - 128) * kc + 128 + off;
+        d[i + c] = v < 0 ? 0 : v > 255 ? 255 : v;
+      }
+    }
+    x.putImageData(img, 0, 0);
+    return out;
+  }
+  // 表示用（長辺1000pxに縮小したものに補正をかけて描画）
+  let previewReq = 0;
+  function refreshPreview() {
+    cancelAnimationFrame(previewReq);
+    previewReq = requestAnimationFrame(() => {
+      if (!crop.base) return;
+      const k = Math.min(1, 1000 / Math.max(crop.w, crop.h));
+      const p = document.createElement('canvas');
+      p.width = Math.max(1, Math.round(crop.w * k)); p.height = Math.max(1, Math.round(crop.h * k));
+      const px = p.getContext('2d'); px.imageSmoothingQuality = 'high'; px.drawImage(crop.base, 0, 0, p.width, p.height);
+      const a = adjustCanvas(p, crop.adj);
+      const v = $('#cropImg');
+      v.width = a.width; v.height = a.height;
+      v.getContext('2d').drawImage(a, 0, 0);
+    });
+  }
+  ['shadow', 'bright', 'contrast'].forEach(k => {
+    $('#adj_' + k).addEventListener('input', e => { crop.adj[k] = +e.target.value; updateAdjLabels(); refreshPreview(); });
+  });
+  $('#cropAuto').addEventListener('click', () => {
+    crop.adj = { shadow: 85, bright: 0, contrast: 15 };
+    ['shadow', 'bright', 'contrast'].forEach(k => { $('#adj_' + k).value = crop.adj[k]; });
+    updateAdjLabels(); refreshPreview();
+  });
   function layoutCrop() {
     const stage = $('#cropStage');
     const cw = stage.clientWidth - 32, ch = stage.clientHeight - 32;
@@ -646,13 +763,13 @@
     c.width = crop.h; c.height = crop.w;
     const x = c.getContext('2d');
     x.translate(c.width, 0); x.rotate(Math.PI / 2);
-    x.drawImage(crop.src, 0, 0);
+    x.drawImage(crop.base, 0, 0);
     setCropSource(c);
     layoutCrop();
   });
   $('#cropReset').addEventListener('click', async () => {
     const it = state.edit.items[crop.idx];
-    try { setCropSource(await loadImage(it.kind === 'old' ? imgUrl(it.name) : it.url)); } catch {}
+    try { resetAdj(); setCropSource(await loadImage(it.kind === 'old' ? imgUrl(it.name) : it.url)); } catch {}
     layoutCrop();
   });
   $('#cropCancel').addEventListener('click', () => closeModal('#cropModal'));
@@ -661,12 +778,13 @@
     const sx = Math.round(b.x), sy = Math.round(b.y), sw = Math.round(b.w), sh = Math.round(b.h);
     // 切り抜いて、横幅1600pxを超えるなら縮小
     const k = Math.min(1, 1600 / sw);
+    const full = adjustCanvas(crop.base, crop.adj);
     const c = document.createElement('canvas');
     c.width = Math.round(sw * k); c.height = Math.round(sh * k);
     const x = c.getContext('2d');
     x.fillStyle = '#fff'; x.fillRect(0, 0, c.width, c.height);
     x.imageSmoothingQuality = 'high';
-    x.drawImage(crop.src, sx, sy, sw, sh, 0, 0, c.width, c.height);
+    x.drawImage(full, sx, sy, sw, sh, 0, 0, c.width, c.height);
     const type = canWebp && state.webpOk ? 'image/webp' : 'image/jpeg';
     c.toBlob(blob => {
       if (!blob || !state.edit) return;

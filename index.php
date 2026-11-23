@@ -84,7 +84,7 @@ $h = function ($s) { return htmlspecialchars((string)$s, ENT_QUOTES); };
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@500;700;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=9">
+<link rel="stylesheet" href="style.css?v=10">
 </head>
 <body>
 <?php if (!$me): ?>
@@ -239,7 +239,7 @@ $h = function ($s) { return htmlspecialchars((string)$s, ENT_QUOTES); };
       </div>
       <div class="crop-stage" id="cropStage">
         <div class="crop-canvas" id="cropCanvas">
-          <img id="cropImg" alt="" draggable="false">
+          <canvas id="cropImg"></canvas>
           <div class="crop-box" id="cropBox">
             <span class="grid-v"></span><span class="grid-h"></span>
             <i data-h="nw"></i><i data-h="n"></i><i data-h="ne"></i><i data-h="e"></i>
@@ -248,7 +248,13 @@ $h = function ($s) { return htmlspecialchars((string)$s, ENT_QUOTES); };
         </div>
       </div>
       <div class="crop-tools">
+        <div class="adj">
+          <label class="adj-row"><span>影を消す</span><input type="range" id="adj_shadow" min="0" max="100" step="1" value="0"><b id="adjv_shadow">0</b></label>
+          <label class="adj-row"><span>明るさ</span><input type="range" id="adj_bright" min="-50" max="50" step="1" value="0"><b id="adjv_bright">0</b></label>
+          <label class="adj-row"><span>くっきり</span><input type="range" id="adj_contrast" min="-30" max="60" step="1" value="0"><b id="adjv_contrast">0</b></label>
+        </div>
         <div class="crop-actions">
+          <button type="button" class="btn small" id="cropAuto">✨ 自動補正</button>
           <button type="button" class="btn small" id="cropRotate">↻ 回転</button>
           <button type="button" class="btn small" id="cropReset">元に戻す</button>
         </div>
@@ -393,7 +399,7 @@ $h = function ($s) { return htmlspecialchars((string)$s, ENT_QUOTES); };
   <div class="lightbox" id="lightbox" hidden><img alt=""></div>
 
   <div class="toast" id="toast" hidden></div>
-  <script src="app.js?v=11"></script>
+  <script src="app.js?v=12"></script>
 <?php endif; ?>
 </body>
 </html>
