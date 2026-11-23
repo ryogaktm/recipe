@@ -84,7 +84,7 @@ $h = function ($s) { return htmlspecialchars((string)$s, ENT_QUOTES); };
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@500;700;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=7">
+<link rel="stylesheet" href="style.css?v=8">
 </head>
 <body>
 <?php if (!$me): ?>
@@ -161,6 +161,7 @@ $h = function ($s) { return htmlspecialchars((string)$s, ENT_QUOTES); };
         <p class="from-line inbox-only" id="viewFrom"></p>
         <h2 id="viewTitle"></h2>
         <div class="chips" id="viewCats"></div>
+        <div class="meta-row" id="viewMeta"></div>
         <div class="memo-box" id="viewMemo" hidden><span class="memo-label">備考・メモ</span><div class="memo-text" id="viewMemoText"></div></div>
         <div class="view-images" id="viewImages"></div>
         <div class="inbox-only inbox-actions">
@@ -195,6 +196,21 @@ $h = function ($s) { return htmlspecialchars((string)$s, ENT_QUOTES); };
             <input type="file" id="fFiles" accept="image/*" multiple hidden>
             <span>＋<br>イメージを追加</span>
           </label>
+        </div>
+
+        <div class="two-col">
+          <div>
+            <label class="field-label">難易度</label>
+            <div class="seg" id="fLevel" role="radiogroup" aria-label="難易度">
+              <button type="button" data-v="1" class="lv1">やさしい</button><button type="button" data-v="2" class="lv2">ふつう</button><button type="button" data-v="3" class="lv3">むずかしい</button>
+            </div>
+          </div>
+          <div>
+            <label class="field-label">おすすめ度</label>
+            <div class="stars-input" id="fRating" role="radiogroup" aria-label="おすすめ度">
+              <button type="button" data-v="1" aria-label="1">★</button><button type="button" data-v="2" aria-label="2">★</button><button type="button" data-v="3" aria-label="3">★</button><button type="button" data-v="4" aria-label="4">★</button><button type="button" data-v="5" aria-label="5">★</button>
+            </div>
+          </div>
         </div>
 
         <label class="field-label" for="fMemo">備考・メモ <span class="hint">（コツ・アレンジ・出典URLなど）</span></label>
@@ -350,7 +366,7 @@ $h = function ($s) { return htmlspecialchars((string)$s, ENT_QUOTES); };
   <div class="lightbox" id="lightbox" hidden><img alt=""></div>
 
   <div class="toast" id="toast" hidden></div>
-  <script src="app.js?v=8"></script>
+  <script src="app.js?v=9"></script>
 <?php endif; ?>
 </body>
 </html>

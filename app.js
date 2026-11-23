@@ -56,6 +56,10 @@
     if (last < text.length) out.push(text.slice(last));
     return out;
   }
+  const LEVELS = ['', 'やさしい', 'ふつう', 'むずかしい'];
+  const starsEl = (n, small) => el('span', { class: 'stars' + (small ? ' sm' : ''), 'aria-label': `おすすめ度${n}` },
+    '★'.repeat(n), el('span', { class: 'off' }, '★'.repeat(5 - n)));
+  const levelEl = n => el('span', { class: 'lv-badge lv' + n }, LEVELS[n]);
   function toast(msg) {
     const t = $('#toast');
     t.textContent = msg; t.hidden = false;
@@ -93,7 +97,7 @@
   function items() {
     if (state.mode === 'inbox') {
       return state.inbox.map(x => ({
-        id: x.share_id, title: x.recipe.title, memo: x.recipe.memo || '', images: x.recipe.images, owner: x.from.id,
+        id: x.share_id, title: x.recipe.title, memo: x.recipe.memo || '', level: x.recipe.level || 0, rating: x.recipe.rating || 0, images: x.recipe.images, owner: x.from.id,
         catNames: x.recipe.category_names, from: x.from, recipeId: x.recipe.id, categories: [],
       }));
     }
@@ -166,6 +170,7 @@
       ),
       el('div', { class: 'meta' },
         r.from ? el('p', { class: 'from' }, r.from.name + ' さんから') : null,
+        (r.level || r.rating) ? el('div', { class: 'meta-row sm' }, r.level ? levelEl(r.level) : null, r.rating ? starsEl(r.rating, true) : null) : null,
         el('p', { class: 'title' }, r.title),
         el('div', { class: 'chips' }, r.catNames.map(n => el('span', { class: 'chip' }, n)))
       )
@@ -201,6 +206,7 @@
     if (dir) { void body.offsetWidth; body.classList.add(dir > 0 ? 'slide-l' : 'slide-r'); }
     $('#viewTitle').textContent = r.title;
     $('#viewFrom').textContent = r.from ? `${r.from.name} さんから共有されたレシピ` : '';
+    $('#viewMeta').replaceChildren(...[r.level ? levelEl(r.level) : null, r.rating ? starsEl(r.rating) : null].filter(Boolean));
     $('#viewMemo').hidden = !r.memo;
     $('#viewMemoText').replaceChildren(...linkify(r.memo || ''));
     $('#viewCats').replaceChildren(...r.catNames.map(n => el('span', { class: 'chip' }, n)));
@@ -266,6 +272,9 @@
     $('#editHeading').textContent = r ? 'レシピを編集' : 'レシピを追加';
     $('#fTitle').value = r ? r.title : '';
     $('#fMemo').value = r ? (r.memo || '') : '';
+    state.edit.level = r ? (r.level || 0) : 0;
+    state.edit.rating = r ? (r.rating || 0) : 0;
+    renderLevelRating();
     $('#newCat').value = '';
     renderThumbs(); renderCatPicker();
     openModal('#editModal');
@@ -329,6 +338,27 @@
       )
     ));
   }
+
+  // 難易度・おすすめ度（同じものをもう一度タップすると解除）
+  function renderLevelRating() {
+    const ed = state.edit;
+    document.querySelectorAll('#fLevel button').forEach(b => {
+      const on = +b.dataset.v === ed.level;
+      b.classList.toggle('on', on); b.setAttribute('aria-checked', on);
+    });
+    document.querySelectorAll('#fRating button').forEach(b => {
+      b.classList.toggle('on', +b.dataset.v <= ed.rating);
+      b.setAttribute('aria-checked', +b.dataset.v === ed.rating);
+    });
+  }
+  $('#fLevel').addEventListener('click', e => {
+    const b = e.target.closest('button'); if (!b || !state.edit) return;
+    state.edit.level = state.edit.level === +b.dataset.v ? 0 : +b.dataset.v; renderLevelRating();
+  });
+  $('#fRating').addEventListener('click', e => {
+    const b = e.target.closest('button'); if (!b || !state.edit) return;
+    state.edit.rating = state.edit.rating === +b.dataset.v ? 0 : +b.dataset.v; renderLevelRating();
+  });
 
   function renderCatPicker() {
     const box = $('#fCats');
@@ -459,6 +489,8 @@
     fd.append('id', ed.id);
     fd.append('title', title);
     fd.append('memo', $('#fMemo').value);
+    fd.append('level', ed.level || 0);
+    fd.append('rating', ed.rating || 0);
     ed.cats.forEach(c => fd.append('categories[]', c));
     let n = 0;
     for (const [i, it] of ed.items.entries()) {

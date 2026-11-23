@@ -463,3 +463,31 @@ body:not(.inbox-mode) .inbox-only { display: none !important; }
 .memo-label { display: block; font-size: 11px; font-weight: 800; color: #9a7b12; margin-bottom: 4px; }
 .memo-text { white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.7; font-size: 15px; }
 .memo-text a { color: var(--green-dk); }
+
+/* ===== 難易度・おすすめ度 ===== */
+.two-col { display: grid; gap: 0 16px; grid-template-columns: minmax(0, 1fr); }
+@media (min-width: 600px) { .two-col { grid-template-columns: minmax(0, 1fr) auto; } }
+.seg { display: flex; background: #f1ecdc; border-radius: 999px; padding: 4px; gap: 4px; }
+.seg button {
+  flex: 1; height: 40px; border: 0; border-radius: 999px; background: transparent;
+  font-size: 14px; font-weight: 700; color: var(--sub); padding: 0 6px; white-space: nowrap;
+}
+.seg button.on { color: #fff; box-shadow: 0 2px 4px rgba(0,0,0,.12); }
+.seg .lv1.on, .lv-badge.lv1 { background: #4aa96c; }
+.seg .lv2.on, .lv-badge.lv2 { background: #e0a32f; }
+.seg .lv3.on, .lv-badge.lv3 { background: #d9534a; }
+.stars-input { display: flex; gap: 2px; }
+.stars-input button {
+  width: 44px; height: 48px; border: 0; background: none; padding: 0;
+  font-size: 32px; line-height: 1; color: #e2dbc6; transition: transform .1s;
+}
+.stars-input button.on { color: #f5b301; }
+.stars-input button:active { transform: scale(.85); }
+.meta-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 0 0 12px; }
+.meta-row.sm { gap: 6px; margin: 0 0 6px; }
+.lv-badge { color: #fff; font-size: 12px; font-weight: 800; padding: 3px 11px; border-radius: 999px; }
+.meta-row.sm .lv-badge { font-size: 10px; padding: 2px 8px; }
+.stars { color: #f5b301; font-size: 18px; letter-spacing: 1px; line-height: 1; white-space: nowrap; }
+.stars.sm { font-size: 13px; letter-spacing: 0; }
+.stars .off { color: #e2dbc6; }
+.two-col .field-label:first-child { margin-top: 18px; }
