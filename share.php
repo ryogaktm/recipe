@@ -33,10 +33,10 @@ $img = function ($f) use ($owner, $key, $h) { return 'image.php?o=' . $h($owner)
 <meta name="csrf-token" content="<?= $h($token) ?>">
 <meta name="theme-color" content="#2f9a5b">
 <title><?= $recipe ? $h($recipe['title']) . ' | RECIPES' : 'RECIPES' ?></title>
-<link rel="icon" type="image/png" href="icons/favicon-64.png">
-<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="icon" type="image/png" href="icons/favicon-64.png?v=2">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png?v=2">
 <link href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@500;700;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=4">
+<link rel="stylesheet" href="style.css?v=5">
 </head>
 <body class="share-page">
   <header class="top">
@@ -52,7 +52,9 @@ $img = function ($f) use ($owner, $key, $h) { return 'image.php?o=' . $h($owner)
     <h2 class="share-h"><?= $h($recipe['title']) ?></h2>
     <?php if ($cats): ?><div class="chips"><?php foreach ($cats as $c): ?><span class="chip"><?= $h($c) ?></span><?php endforeach; ?></div><?php endif; ?>
     <div class="view-images share-images">
-      <?php foreach ($recipe['images'] as $f): ?><img src="<?= $img($f) ?>" alt="" loading="lazy"><?php endforeach; ?>
+      <?php $roles = ['材料', '作り方', '表紙']; foreach ($recipe['images'] as $i => $f): ?>
+        <figure class="img-block"><figcaption class="img-role r<?= min($i, 3) ?>"><?= $roles[$i] ?? 'イメージ' ?></figcaption><img src="<?= $img($f) ?>" alt="" loading="lazy"></figure>
+      <?php endforeach; ?>
     </div>
     <div class="share-cta">
       <?php if ($viewer && $viewer['id'] === $owner): ?>

@@ -36,6 +36,10 @@
     return json;
   }
   const imgUrl = (name, owner) => 'image.php?o=' + encodeURIComponent(owner || state.me.id) + '&f=' + encodeURIComponent(name);
+  // 画像の役割：1枚目=材料、2枚目=作り方、3枚目=表紙、4枚目以降=イメージ
+  const ROLES = ['材料', '作り方', '表紙'];
+  const roleOf = i => ROLES[i] || 'イメージ';
+  const coverOf = imgs => imgs[2] || imgs[0];
   const isPC = matchMedia('(hover: hover) and (pointer: fine)').matches;
   const catName = (id) => (state.categories.find(c => c.id === id) || {}).name;
 
@@ -125,7 +129,7 @@
       }, i < 9 ? el('span', { class: 'k' }, String(i + 1)) : null, c.name, el('span', { class: 'n' }, String(counts[c.id] || 0)))
     );
     const manage = el('button', { class: 'fchip ghost', onclick: openCatManager }, '⚙ カテゴリ');
-    bar.replaceChildren(all, ...chips, manage, inboxChip);
+    bar.replaceChildren(...[all, ...chips, manage, inboxChip].filter(Boolean));
   }
 
   function setMode(m) {
@@ -143,7 +147,7 @@
   function card(r) {
     return el('button', { class: 'card', onclick: () => openView(r.id) },
       el('div', { class: 'thumb' },
-        el('img', { src: imgUrl(r.images[0], r.owner), loading: 'lazy', alt: '' }),
+        el('img', { src: imgUrl(coverOf(r.images), r.owner), loading: 'lazy', alt: '' }),
         r.images.length > 1 ? el('span', { class: 'badge' }, `${r.images.length}枚`) : null
       ),
       el('div', { class: 'meta' },
@@ -184,8 +188,10 @@
     $('#viewTitle').textContent = r.title;
     $('#viewFrom').textContent = r.from ? `${r.from.name} さんから共有されたレシピ` : '';
     $('#viewCats').replaceChildren(...r.catNames.map(n => el('span', { class: 'chip' }, n)));
-    $('#viewImages').replaceChildren(...r.images.map(n =>
-      el('img', { src: imgUrl(n, r.owner), alt: '', onclick: () => openLightbox(imgUrl(n, r.owner)) })
+    $('#viewImages').replaceChildren(...r.images.map((n, i) =>
+      el('figure', { class: 'img-block' },
+        el('figcaption', { class: 'img-role r' + Math.min(i, 3) }, roleOf(i)),
+        el('img', { src: imgUrl(n, r.owner), alt: roleOf(i), onclick: () => openLightbox(imgUrl(n, r.owner)) }))
     ));
     $('#viewModal .view-body').scrollTop = 0;
     openModal('#viewModal');
@@ -262,7 +268,7 @@
     $('#thumbs').replaceChildren(...items.map((it, i) =>
       el('div', { class: 'tb' },
         el('img', { src: it.kind === 'old' ? imgUrl(it.name) : it.url, alt: '' }),
-        items.length > 1 ? el('span', { class: 'no' }, String(i + 1)) : null,
+        el('span', { class: 'no r' + Math.min(i, 3) }, roleOf(i)),
         el('button', { type: 'button', class: 'x', title: '外す', onclick: () => {
           if (it.kind === 'new') URL.revokeObjectURL(it.url);
           items.splice(i, 1); renderThumbs();

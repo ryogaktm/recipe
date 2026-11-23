@@ -1,6 +1,6 @@
 // ホーム画面に追加（インストール）できるようにするための最小限のService Worker。
 // データは常にサーバーから取るので、キャッシュはアイコン・CSS・JSだけ。
-const CACHE = 'recipes-v4';
+const CACHE = 'recipes-v5';
 const ASSETS = ['icons/icon-192.png', 'icons/icon-512.png', 'icons/favicon-64.png'];
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(ASSETS)).then(() => self.skipWaiting()));

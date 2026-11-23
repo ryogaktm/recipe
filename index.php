@@ -78,19 +78,19 @@ $h = function ($s) { return htmlspecialchars((string)$s, ENT_QUOTES); };
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="RECIPES">
 <title>RECIPES</title>
-<link rel="manifest" href="manifest.webmanifest">
-<link rel="icon" type="image/png" href="icons/favicon-64.png">
-<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="manifest" href="manifest.webmanifest?v=2">
+<link rel="icon" type="image/png" href="icons/favicon-64.png?v=2">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png?v=2">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@500;700;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=4">
+<link rel="stylesheet" href="style.css?v=5">
 </head>
 <body>
 <?php if (!$me): ?>
   <main class="login">
     <form method="post" class="login-card" autocomplete="on">
-      <img class="login-icon" src="icons/icon-192.png" alt="" width="96" height="96">
+      <img class="login-icon" src="icons/icon-192.png?v=2" alt="" width="96" height="96">
       <h1 class="logo">RECIPES</h1>
       <?php if ($noUsers): ?>
         <p class="login-note">はじめに管理者アカウントを作ります</p>
@@ -183,7 +183,8 @@ $h = function ($s) { return htmlspecialchars((string)$s, ENT_QUOTES); };
         <label class="field-label">タイトル</label>
         <input id="fTitle" class="input" maxlength="100" placeholder="例：ふわふわパンケーキ" required>
 
-        <label class="field-label">画像 <span class="hint">（複数OK・貼り付け/ドラッグでも追加できます）</span></label>
+        <label class="field-label">画像 <span class="hint">（貼り付け/ドラッグでも追加できます）</span></label>
+        <p class="role-guide"><span class="r0">1 材料</span><span class="r1">2 作り方</span><span class="r2">3 表紙</span><span class="r3">4〜 イメージ</span></p>
         <div class="drop" id="drop">
           <div class="thumbs" id="thumbs"></div>
           <label class="add-img">
@@ -342,7 +343,7 @@ $h = function ($s) { return htmlspecialchars((string)$s, ENT_QUOTES); };
   <div class="lightbox" id="lightbox" hidden><img alt=""></div>
 
   <div class="toast" id="toast" hidden></div>
-  <script src="app.js?v=4"></script>
+  <script src="app.js?v=5"></script>
 <?php endif; ?>
 </body>
 </html>
