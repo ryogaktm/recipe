@@ -32,7 +32,7 @@ $token = csrf_token();
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@500;700;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=1">
+<link rel="stylesheet" href="style.css?v=2">
 </head>
 <body>
 <?php if (!$authed): ?>
@@ -137,7 +137,7 @@ $token = csrf_token();
   <div class="lightbox" id="lightbox" hidden><img alt=""></div>
 
   <div class="toast" id="toast" hidden></div>
-  <script src="app.js?v=1"></script>
+  <script src="app.js?v=2"></script>
 <?php endif; ?>
 </body>
 </html>

@@ -21,8 +21,10 @@
       else { const fd = new FormData(); for (const k in data) fd.append(k, data[k]); opt.body = fd; }
     }
     const res = await fetch('api.php?action=' + action, opt);
+    const text = await res.text();
     let json;
-    try { json = await res.json(); } catch { throw new Error('サーバーエラー（' + res.status + '）'); }
+    try { json = JSON.parse(text); }
+    catch { throw new Error('サーバーエラー（' + res.status + '）\n' + text.replace(/<[^>]+>/g, '').trim().slice(0, 300)); }
     if (!res.ok || json.error) {
       if (res.status === 401) location.reload();
       throw new Error(json.error || 'エラーが発生しました');

@@ -1,10 +1,19 @@
 <?php
+ini_set('display_errors', '0');
+// 致命的エラーもJSONで返して、画面に原因が出るようにする
+register_shutdown_function(function () {
+    $e = error_get_last();
+    if ($e && in_array($e['type'], [E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR], true)) {
+        if (!headers_sent()) { http_response_code(500); header('Content-Type: application/json; charset=utf-8'); }
+        echo json_encode(['error' => 'サーバーエラー: ' . $e['message'] . ' (' . basename($e['file']) . ':' . $e['line'] . ')'], JSON_UNESCAPED_UNICODE);
+    }
+});
 require __DIR__ . '/config.php';
 session_start();
 header('Content-Type: application/json; charset=utf-8');
 
 function out($data) { echo json_encode($data, JSON_UNESCAPED_UNICODE); exit; }
-function fail(string $msg, int $code = 400) { http_response_code($code); out(['error' => $msg]); }
+function fail($msg, $code = 400) { http_response_code($code); out(['error' => $msg]); }
 
 if (!auth_ok()) fail('ログインが必要です', 401);
 $action = $_GET['action'] ?? 'list';
@@ -21,16 +30,16 @@ $recipes    = load_json('recipes');
 $categories = load_json('categories');
 $catIds     = array_column($categories, 'id');
 
-function clean_name(string $s, int $max): string {
+function clean_name($s, $max) {
     $s = trim(preg_replace('/\s+/u', ' ', $s));
     return mb_substr($s, 0, $max);
 }
-function new_id(string $prefix): string { return $prefix . bin2hex(random_bytes(6)); }
-function find_index(array $list, string $id): int {
+function new_id($prefix) { return $prefix . bin2hex(random_bytes(6)); }
+function find_index($list, $id) {
     foreach ($list as $i => $r) if ($r['id'] === $id) return $i;
     return -1;
 }
-function delete_images(array $files): void {
+function delete_images($files) {
     foreach ($files as $f) {
         $p = UPLOAD_DIR . '/' . basename($f);
         if (is_file($p)) @unlink($p);
@@ -57,7 +66,6 @@ case 'save_recipe':
     $mimeExt = ['image/jpeg' => 'jpg', 'image/png' => 'png', 'image/webp' => 'webp', 'image/gif' => 'gif'];
     $files = $_FILES['images'] ?? null;
     if ($files && is_array($files['name'])) {
-        $finfo = new finfo(FILEINFO_MIME_TYPE);
         foreach ($files['name'] as $i => $_) {
             $err = $files['error'][$i];
             if ($err === UPLOAD_ERR_NO_FILE) continue;
@@ -65,7 +73,7 @@ case 'save_recipe':
                 delete_images($added);
                 fail('画像のアップロードに失敗しました（サイズが大きすぎる可能性があります）');
             }
-            $mime = $finfo->file($files['tmp_name'][$i]);
+            $mime = detect_image_mime($files['tmp_name'][$i]);
             if (!isset($mimeExt[$mime])) { delete_images($added); fail('対応していない画像形式です'); }
             $name = bin2hex(random_bytes(12)) . '.' . $mimeExt[$mime];
             if (!move_uploaded_file($files['tmp_name'][$i], UPLOAD_DIR . '/' . $name)) {
