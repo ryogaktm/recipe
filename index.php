@@ -84,7 +84,7 @@ $h = function ($s) { return htmlspecialchars((string)$s, ENT_QUOTES); };
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@500;700;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=12">
+<link rel="stylesheet" href="style.css?v=13">
 </head>
 <body>
 <?php if (!$me): ?>
@@ -157,9 +157,9 @@ $h = function ($s) { return htmlspecialchars((string)$s, ENT_QUOTES); };
           <button class="btn small" id="editBtn" title="編集 (E)">編集</button>
         </div>
       </div>
+      <div class="view-titlebar"><h2 id="viewTitle"></h2></div>
       <div class="view-body">
         <p class="from-line inbox-only" id="viewFrom"></p>
-        <h2 id="viewTitle"></h2>
         <div class="chips" id="viewCats"></div>
         <div class="meta-row" id="viewMeta"></div>
         <div class="memo-box" id="viewMemo" hidden><span class="memo-label">備考・メモ</span><div class="memo-text" id="viewMemoText"></div></div>
